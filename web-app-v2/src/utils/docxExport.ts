@@ -149,11 +149,11 @@ export const generateProgramaDocx = async (
         if (p.habilidades_especificas) {
             children.push(new Paragraph({ children: [new TextRun({ text: "Habilidades a Desarrollar:", bold: true })], spacing: { after: 100 } }));
             if (p.habilidades_especificas.tecnicas && p.habilidades_especificas.tecnicas.length > 0) {
-                children.push(new Paragraph({ text: "Técnicas:", bold: true }));
+                children.push(new Paragraph({ children: [new TextRun({ text: "Técnicas:", bold: true })] }));
                 p.habilidades_especificas.tecnicas.forEach((h: string) => children.push(new Paragraph({ text: h, bullet: { level: 1 } })));
             }
             if (p.habilidades_especificas.transversales && p.habilidades_especificas.transversales.length > 0) {
-                children.push(new Paragraph({ text: "Transversales:", bold: true, spacing: { before: 100 } }));
+                children.push(new Paragraph({ children: [new TextRun({ text: "Transversales:", bold: true })], spacing: { before: 100 } }));
                 p.habilidades_especificas.transversales.forEach((h: string) => children.push(new Paragraph({ text: h, bullet: { level: 1 } })));
             }
             children.push(new Paragraph({ text: "", spacing: { after: 100 } }));

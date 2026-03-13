@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCualificaciones } from '../../hooks/useCualificaciones';
 import { Card, Badge, Button, LoadingState, ErrorState, Stepper, Select, SectionHeader } from '../../components/ui';
-import { CheckCircle2, Circle, Save, Target, Sparkles, ChevronRight, ChevronLeft, Edit2, FileText, AlertCircle, BookOpen, RotateCcw, X, GraduationCap, Clock } from 'lucide-react';
+import { CheckCircle2, Circle, Save, Target, Sparkles, ChevronRight, ChevronLeft, Edit2, FileText, AlertCircle, BookOpen, RotateCcw, X } from 'lucide-react';
 import { SilaboModal, type SilaboData } from './SilaboModal';
 import { EvaluacionModal } from './EvaluacionModal';
 import { supabase } from '../../lib/supabase';
