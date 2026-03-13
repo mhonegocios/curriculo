@@ -1,0 +1,27 @@
+# System folders
+.git/
+.agent/
+.gemini/
+
+# Node dependencies (general)
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+*.log
+tsc_output.txt
+
+# Backups and temporary files
+backup_chunk_*.json
+debug_nodes.json
+/tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environmental variables
+.env

@@ -1,0 +1,369 @@
+const pdfText = $('Extraer Texto del PDF').item.json.text;
+const fileName = $('Google Drive - Listar PDFs').item.json.name;
+
+// Obtenemos los datos de CINE F desde el Merge (input 2)
+const cineFData = $('Merge PDF + CINE F').all().filter(item => item.json.id && item.json.descripcion).map(item => item.json);
+const cineFPrompt = JSON.stringify(cineFData.map(c => ({
+    id: c.id,
+    descripcion: c.descripcion,
+    cinef_detallado: c.cinef_detallado
+})));
+
+// 1. Definimos el cuerpo principal del prompt
+const promptBody = `Eres un experto en análisis de documentos educativos del Marco Nacional de Cualificaciones de Colombia.
+
+Analiza el siguiente PDF de cualificación y extrae TODA la información en formato JSON ESTRICTO.
+
+ARCHIVO: ${fileName}
+
+Aquí tienes una lista de códigos CINE F (Clasificación Internacional Normalizada de la Educación - Campos de Educación y Formación) disponibles en la base de datos:
+${cineFPrompt}
+
+CONTENIDO DEL PDF:
+${pdfText}
+
+Debes extraer:
+
+{
+  "identificacion": {
+    "codigo": "código completo ej: 4-TUHG-A&B-004",
+    "version": "ej: 01 - 2021",
+    "fecha_aprobacion": "YYYY-MM-DD o null",
+    "estado": "Vigente|En construcción|Obsoleta",
+    "denominacion": "nombre del programa",
+    "nivel_mnc": número del 1 al 8,
+    "area_cualificacion": "sector completo",
+    "duracion_horas": número,
+    "duracion_creditos": número decimal o null,
+    "cine_f_id": "ID (UUID) del código CINE F más apropiado de la lista proporcionada, basado en el Área de Cualificación",
+    "cine_n": número (90, 91, 92, 93) calculado según las reglas de requisitos de ingreso
+  },
+  "perfil": {
+    "competencia_general": "texto completo",
+    "sector_productivo": "texto",
+    "subsector": "texto",
+    "contexto_accion": "texto completo donde se desempeñan"
+  },
+  "requisitos_ingreso": "Texto completo de los requisitos de ingreso, entrada o acceso a la cualificación (generalmente al final del documento). Si no existen, usar null",
+  "ocupaciones_relacionadas": "Lista completa separada por ;. SIEMPRE incluye el código de la ocupación junto con el nombre (ej: 6211 - Agricultor). Si no hay código, usa solo el nombre.",
+  "competencias_especificas": [
+    {
+      "codigo": "UC1-3-AGRO-AGR-001",
+      "denominacion": "texto completo",
+      "es_transversal": true|false,
+      "duracion_horas": número o null,
+      "elementos": [
+        {
+          "numero": 1,
+          "descripcion": "texto completo del elemento de competencia",
+          "criterios_desempeno": [
+            "Texto completo del criterio 1",
+            "Texto completo del criterio 2"
+          ]
+        }
+      ],
+      "resultados_aprendizaje": [
+        {
+          "codigo": "RA1",
+          "descripcion": "texto completo del resultado de aprendizaje",
+          "duracion_horas": número o null,
+          "criterios_evaluacion": [
+            {
+              "codigo": "CE1",
+              "descripcion": "texto completo del criterio"
+            }
+          ]
+        }
+      ],
+      "contenidos": {
+        "conceptuales": ["texto 1", "texto 2"],
+        "procedimentales": ["texto 1", "texto 2"],
+        "actitudinales": ["texto 1", "texto 2"],
+        "fuente": "extraido" | "generado_ia"
+      }
+    }
+  ]
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 INSTRUCCIONES CRÍTICAS PARA CINE N (Niveles de Educación):
+
+Determina el código CINE N basándote ESTRICTAMENTE en los "Requisitos de ingreso":
+
+- **90**: Si NO existen prerrequisitos de ingreso.
+- **91**: Si el requisito es Básica Primaria.
+- **92**: Si el requisito es Básica Secundaria (Grado Noveno).
+- **93**: Si el requisito es Educación Media (Grado Once / Bachiller) O si la cualificación es de Nivel 4 en el MNC.
+
+Analiza el texto de "Requisitos de ingreso" para tomar esta decisión.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 INSTRUCCIONES CRÍTICAS PARA CINE F:
+
+1. Revisa el campo "Area de Cualificación" del documento.
+2. Busca en la lista de CINE F proporcionada arriba aquel cuya "descripcion" o "cinef_detallado" sea la MEJOR coincidencia semántica.
+3. Extrae el UUID correspondiente y ponlo en el campo "cine_f_id".
+4. ES OBLIGATORIO SELECCIONAR UNO DE LA LISTA.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 INSTRUCCIONES CRÍTICAS PARA REQUISITOS Y OCUPACIONES:
+
+1. **REQUISITOS DE INGRESO:**
+   - Busca secciones como "Requisitos de ingreso", "Requisitos de entrada", "Requisitos de acceso" o "Criterios de ingreso".
+   - Suelen estar hacia el FINAL del documento.
+   - Extrae todo el texto relevante. Si no encuentras nada explícito, devuelve null.
+
+2. **OCUPACIONES RELACIONADAS:**
+   - Busca la tabla o lista de ocupaciones relacionadas.
+   - **FORMATO ESTRICTO:** Debes extraer SIEMPRE el código y el nombre concatenados.
+   - Ejemplo correcto: "6211 - Agricultor de cultivos transitorios; 6212 - Agricultor de cultivos permanentes"
+   - Ejemplo INCORRECTO: "Agricultor; Cultivador"
+   - Si el PDF tiene una tabla con columnas "Código" y "Denominación", únelos con " - ".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 INSTRUCCIONES CRÍTICAS PARA ELEMENTOS DE COMPETENCIA:
+
+**UBICACIÓN EN EL PDF:**
+- Busca la sección "UNIDAD DE COMPETENCIA" en el documento
+- Dentro de cada UC, busca subsecciones "Elemento de competencia 1:", "Elemento de competencia 2:", etc.
+
+**ESTRUCTURA OBLIGATORIA:**
+NUNCA extraigas elementos como: ["string1", "string2", "string3"]
+SIEMPRE debe ser un array de OBJETOS con esta estructura:
+
+{
+  "numero": 1,
+  "descripcion": "Determinar aspectos técnicos de la producción agrícola de acuerdo con las demandas del mercado y las técnicas y métodos de producción",
+  "criterios_desempeno": [
+    "La selección de especies agrícolas a producir corresponde con las condiciones de la zona geográfica y las demandas del mercado",
+    "El cálculo de los requerimientos de recursos físicos, económicos, técnicos y humanos en la producción agrícola corresponde con las necesidades del cultivo y recomendaciones técnicas"
+  ]
+}
+
+**PASOS PARA EXTRAER:**
+
+1. **Identificar el número del elemento:**
+   - "Elemento de competencia 1:" → numero: 1
+   - "Elemento de competencia 2:" → numero: 2
+
+2. **Extraer la descripción:**
+   - Es el texto que aparece después de "Elemento de competencia X:"
+   - Copia TODO el texto hasta que empiece la sección "Criterios de desempeño"
+
+3. **Extraer criterios de desempeño:**
+   - Busca DEBAJO del elemento la subsección "Criterios de desempeño"
+   - Los criterios empiezan con viñetas (•) o guiones (-)
+   - Cada criterio es una oración completa
+   - Extrae TODOS los criterios asociados a ese elemento específico
+   - Si no hay criterios explícitos, usa array vacío []
+
+**EJEMPLO DE EXTRACCIÓN CORRECTA:**
+
+Si el PDF dice:
+
+"Elemento de competencia 1: Determinar aspectos técnicos de la producción agrícola...
+
+Criterios de desempeño
+- La selección de especies agrícolas a producir corresponde...
+- El cálculo de los requerimientos de recursos físicos...
+- La estimación de volúmenes y variables de producción..."
+
+Debes extraer:
+
+{
+  "numero": 1,
+  "descripcion": "Determinar aspectos técnicos de la producción agrícola de acuerdo con las demandas del mercado y las técnicas y métodos de producción",
+  "criterios_desempeno": [
+    "La selección de especies agrícolas a producir corresponde con las condiciones de la zona geográfica y las demandas del mercado",
+    "El cálculo de los requerimientos de recursos físicos, económicos, técnicos y humanos en la producción agrícola corresponde con las necesidades del cultivo y recomendaciones técnicas",
+    "La estimación de volúmenes y variables de producción agrícola corresponde con los ciclos de cultivo y las demandas del mercado"
+  ]
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 INSTRUCCIONES CRÍTICAS PARA RESULTADOS DE APRENDIZAJE:
+
+**UBICACIÓN EN EL PDF:**
+- Busca la sección "UNIDAD DE APRENDIZAJE" en el documento
+- Dentro de cada UA, busca subsecciones "Resultado de aprendizaje 1:", "Resultado de aprendizaje 2:", etc.
+
+**ESTRUCTURA OBLIGATORIA:**
+
+{
+  "codigo": "RA1",
+  "descripcion": "Plantear distintos tipos de producción agrícola en función de las condiciones agroclimáticas y características y tendencias del mercado",
+  "duracion_horas": 40,
+  "criterios_evaluacion": [
+    {
+      "codigo": "CE1",
+      "descripcion": "Identifica las características del mercado teniendo en cuenta el sistema productivo agrícola"
+    },
+    {
+      "codigo": "CE2",
+      "descripcion": "Valora las condiciones edafoclimáticas según criterios técnicos y necesidades del cultivo"
+    }
+  ]
+}
+
+**PASOS PARA EXTRAER:**
+
+1. **Código del resultado:**
+   - "Resultado de aprendizaje 1:" → codigo: "RA1"
+   - "Resultado de aprendizaje 2:" → codigo: "RA2"
+
+2. **Descripción:**
+   - Es el texto que aparece después de "Resultado de aprendizaje X:"
+   - Copia TODO hasta que empiece "Criterios de evaluación"
+
+3. **Duración en horas:**
+   - Busca si se especifica duración
+   - Si no aparece, usa null
+
+4. **Criterios de evaluación:**
+   - Busca la subsección "Criterios de evaluación" DEBAJO del resultado
+   - Cada criterio tiene un código (CE1, CE2, etc.) y una descripción
+   - Extrae TODOS los criterios asociados
+   - Si no hay criterios, usa array vacío []
+
+**EJEMPLO DE EXTRACCIÓN CORRECTA:**
+
+Si el PDF dice:
+
+"Resultado de aprendizaje 1: Plantear distintos tipos de producción agrícola...
+
+Criterios de evaluación
+CE1. Identifica las características del mercado teniendo en cuenta...
+CE2. Valora las condiciones edafoclimáticas según criterios técnicos...
+CE3. Define el tipo de sistema productivo agrícola en correspondencia..."
+
+Debes extraer:
+
+{
+  "codigo": "RA1",
+  "descripcion": "Plantear distintos tipos de producción agrícola en función de las condiciones agroclimáticas y características y tendencias del mercado",
+  "duracion_horas": null,
+  "criterios_evaluacion": [
+    {
+      "codigo": "CE1",
+      "descripcion": "Identifica las características del mercado teniendo en cuenta el sistema productivo agrícola"
+    },
+    {
+      "codigo": "CE2",
+      "descripcion": "Valora las condiciones edafoclimáticas según criterios técnicos y necesidades del cultivo"
+    },
+    {
+      "codigo": "CE3",
+      "descripcion": "Define el tipo de sistema productivo agrícola en correspondencia con las condiciones agroclimáticas y tipos de mercado"
+    }
+  ]
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 INSTRUCCIONES CRÍTICAS PARA LOS CONTENIDOS (EXTRACCIÓN ESTRICTA):
+
+**OBJETIVO:** Extraer los contenidos (saberes) tal como aparecen en el documento. **NO INVENTAR NI GENERAR INFORMACIÓN.**
+
+Busca en cada Unidad de Aprendizaje (UA) la sección titulada:
+- "Contenidos (del saber, saber hacer, saber ser)"
+- "Contenidos curriculares"
+- "Saberes"
+- O cualquier variación similar
+
+La tabla típicamente tiene 3 COLUMNAS:
+┌───────────────┬──────────────────┬────────────────┐
+│ Conceptuales  │ Procedimentales  │ Actitudinales  │
+│ (SABER)       │ (SABER HACER)    │ (SABER SER)    │
+└───────────────┴──────────────────┴────────────────┘
+
+Si encuentras esta tabla:
+→ Extrae TODO el texto de cada columna TAL CUAL aparece
+→ Cada párrafo o ítem = 1 elemento del array
+→ NO resumas, copia COMPLETO
+→ Marca: "fuente": "extraido"
+
+**PASO 2: SI NO EXISTE LA TABLA, GENERAR CON IA**
+
+Si después de revisar toda la Unidad de Aprendizaje NO encuentras una tabla de contenidos explícita:
+
+🧠 **GENERA contenidos coherentes basándote en:**
+
+1. **Para CONCEPTUALES (Saber teórico)**:
+   - Analiza la denominación de la competencia
+   - Analiza los elementos de competencia
+   - Analiza los criterios de desempeño
+   - Infiere qué conocimientos teóricos necesita dominar
+   - Formato: "Concepto: definición, tipos, características, aplicación"
+   - Genera 8-15 ítems
+
+2. **Para PROCEDIMENTALES (Saber hacer)**:
+   - Convierte los criterios de desempeño en habilidades
+   - Usa verbos de acción: "Aplicación de...", "Manejo de...", "Uso de..."
+   - Genera 6-12 ítems
+
+3. **Para ACTITUDINALES (Saber ser)**:
+   - Infiere valores, actitudes y comportamientos profesionales
+   - Usa sustantivos: "Rigurosidad en...", "Disposición a...", "Capacidad de..."
+   - Genera 4-8 ítems
+
+→ Marca: "fuente": "generado_ia"
+
+**VALIDACIÓN FINAL DE CONTENIDOS:**
+- TODA competencia DEBE tener su objeto "contenidos"
+- TODA competencia DEBE tener las 3 llaves (conceptuales, procedimentales, actitudinales) + "fuente"
+- Los arrays NO pueden estar vacíos (mínimo 3 ítems cada uno)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 REGLAS CRÍTICAS GENERALES:
+
+1. Si un campo no existe en el documento, usa null o []
+2. NO inventes información de identificación o perfiles
+3. Responde ÚNICAMENTE con el JSON, sin texto adicional
+4. NO uses markdown (sin \`\`\`json ni \`\`\`)
+5. Asegúrate de que sea JSON válido
+6. CIERRA TODAS las llaves y corchetes correctamente
+7. Prioriza COMPLETAR el JSON sobre ser perfecto
+8. Los elementos NUNCA son strings simples, SIEMPRE objetos
+9. Los resultados de aprendizaje NUNCA son strings simples, SIEMPRE objetos
+10. Mantén la precisión en los códigos (UC1, RA1, CE1, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FORMATO FINAL ESPERADO:
+
+El JSON debe poder parsearse directamente sin errores.
+Cada competencia debe tener TODAS sus partes completas.
+Verifica que hayas cerrado todos los corchetes y llaves antes de terminar.`;
+
+// 2. Definimos las instrucciones de formato (ESTO ERA LO QUE DABA ERROR ANTES)
+// Nota: Las barras invertidas antes de las comillas ( \` ) son necesarias aquí
+const instruccionesFinales = `
+RESPONDE ÚNICAMENTE CON EL JSON PURO
+NO uses bloques de código markdown
+NO agregues texto antes o después del JSON
+La respuesta debe comenzar directamente con el carácter { y terminar con }
+
+Ejemplo de respuesta CORRECTA:
+{
+  "identificacion": {...}
+}
+
+Ejemplo de respuesta INCORRECTA (NO hagas esto):
+- No incluyas "\`\`\`json" al inicio
+- No incluyas "\`\`\`" al final
+- No agregues explicaciones antes o después
+`;
+
+// 3. Unimos todo y devolvemos el resultado
+return {
+  json: {
+    prompt: promptBody + "\n" + instruccionesFinales,
+    fileName: fileName
+  }
+};

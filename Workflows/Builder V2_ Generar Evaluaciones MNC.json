@@ -1,0 +1,155 @@
+{
+  "name": "Builder V2: Generar Evaluaciones MNC",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generar-evaluacion-microcredencial",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "webhookId": "7bc10463-6025-4200-9355-5ecc1ce03ee2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Por favor, genera el JSON estricto con las evaluaciones.\n\n**Nombre del Programa:**\n{{ $json.body.programa.nombre }}\n\n**Tipo:**\n{{ $json.body.programa.tipo }}\n\n**Horas:**\n{{ $json.body.programa.horas }}\n\n**Descripción:**\n{{ $json.body.programa.descripcion }}\n\n**Resultados de Aprendizaje y Criterios a Evaluar:**\n{{ JSON.stringify($json.body.ras, null, 2) }}\n\n**(NUEVO) Parámetros de Evaluación Institucional:**\nEscala: {{ $json.body.parametros_evaluacion.escala_valores }}\nTipo: {{ $json.body.parametros_evaluacion.tipo_escala }}\n\n**(NUEVO) Actividades de Aprendizaje Sugeridas (Sílabo):**\nRevisa detenidamente estas actividades, ya que la evaluación de los RAs DEBE derivarse de ellas.\n{{ JSON.stringify($json.body.silabo_actividades, null, 2) }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=Eres un Diseñador Instruccional Experto en Evaluación por Competencias y Marco Nacional de Cualificaciones (MNC).\n\nEl usuario solicitará la creación de evaluaciones alineadas para un programa de educación continua. Recibirás un JSON con el programa, los RAs (con sus criterios de evaluación), las `silabo_actividades` y los `parametros_evaluacion`.\n\nTU TAREA:\nPara cada Resultado de Aprendizaje, analiza sus Criterios de Evaluación exactos y las actividades del sílabo, y diseña:\n1. Una Actividad Evaluativa o Evidencia que logre abarcar todos o la mayoría de los criterios de evaluación de ese RA, y DEBE ESTAR ALINEADA con alguna de las `silabo_actividades`.\n2. Una rúbrica o matriz que especifique los niveles de logro. **MUY IMPORTANTE**: Los niveles de la rúbrica (su cantidad y denominación) DEBEN corresponder estrictamente al tipo y escala definidos en los `parametros_evaluacion`. Por ejemplo:\n- Si es \"Aprobado / Reprobado\", la rúbrica solo tendrá 2 niveles.\n- Si es cuantitativo \"0.0 a 5.0\", escoge niveles descriptivos (ej: Excelente, Bueno, Regular, Deficiente).\n\nREGLAS DE ORO:\n- PROHIBIDO parafrasear, resumir o modificar los Criterios de Evaluación suministrados en `criterios_cubiertos`.\n- NO INVENTES criterios de evaluación nuevos.\n- Para el campo `criterios_cubiertos`, actúa como una función de \"copiar y pegar\". Extrae literalmente la cadena de texto exacta (incluyendo el código).\n- La rúbrica generada DEBE ser un arreglo (`rubrica: []`) de niveles, garantizando coherencia matemática o textual con la escala solicitada.\n\nMUY IMPORTANTE: DEBES DEVOLVER EXCLUSIVAMENTE UN OBJETO JSON CON EL SIGUIENTE FORMATO EXACTO Y SIN TEXTO ADICIONAL ANTES NI DESPUÉS:\n{\n  \"evaluaciones\": [\n    {\n      \"resultado_aprendizaje\": \"Descripción del RA...\",\n      \"criterios_cubiertos\": [\"CE1: descripción\", \"CE2: descripción\"],\n      \"actividad_evaluativa\": {\n         \"nombre\": \"Nombre\",\n         \"tipo\": \"Producto / Desempeño / Conocimiento\",\n         \"descripcion\": \"Descripción detallada de la estrategia a realizar.\"\n      },\n      \"rubrica\": [\n         { \"nivel_academico\": \"Aprobado\", \"descripcion\": \"...\" },\n         { \"nivel_academico\": \"Reprobado\", \"descripcion\": \"...\" }\n      ]\n    }\n  ]\n}\n\nPayload entrante:\n{{ $json.body }}"
+            }
+          ]
+        }
+      },
+      "id": "chain-1",
+      "name": "Basic LLM Chain",
+      "position": [
+        208,
+        0
+      ],
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "model-1",
+      "name": "gpt-4o-mini",
+      "position": [
+        208,
+        208
+      ],
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "a1xNtGGCWGLguIEC",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.first().json.text || \"\";\nconst cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry {\n  parsed = JSON.parse(cleanText);\n} catch (error) {\n  parsed = { evaluaciones: [] };\n}\nreturn parsed;"
+      },
+      "id": "parse-1",
+      "name": "Parse JSON",
+      "position": [
+        544,
+        0
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "response-1",
+      "name": "Webhook Responder",
+      "position": [
+        768,
+        0
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Parse JSON",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Webhook Responder",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Basic LLM Chain",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "gpt-4o-mini": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "929c98af-c3ea-4233-a08f-180717092ec6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9e365148c8286a677c2159a5315beb8e14bed6fd8d208e41bf624f1b9ed08549"
+  },
+  "id": "Wbzs4yOEYxczMdv8",
+  "tags": []
+}

@@ -1,0 +1,114 @@
+{
+  "name": "Sugerir RAs (Asistente IA) V2",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "sugerir-ras-mnc",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=El usuario quiere crear un programa de formación. Esto es lo que pidió: \n\"{{ $json.body.prompt }}\"\n\nInstrucciones:\n1. Usa la herramienta de búsqueda de vectores para encontrar los correspondientes \"Resultados de Aprendizaje\" (RAs) en la base de datos que mejor coincidan con esta solicitud.\n2. Solo puedes retornar UUIDs de los resultados que la herramienta de búsqueda devuelva. No inventes IDs.\n3. Extraer entre 3 a 5 RAs.\n4. Sugiere un nombre comercial/educativo corto (máximo 5 palabras) basándote en la solicitud original de la persona.",
+        "options": {}
+      },
+      "id": "agent-1",
+      "name": "Agente Asistente IA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "model-1",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [300, 250],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "QpyFgg388EdoFayA",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableName": "edu_continua_outcomes",
+        "options": {}
+      },
+      "id": "vector-1",
+      "name": "Supabase Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1,
+      "position": [500, 250],
+      "credentials": {
+        "supabaseApi": {
+          "id": "rbH3Bi9tJIw9jl4L",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "embed-1",
+      "name": "Google Gemini Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [500, 450],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "QpyFgg388EdoFayA",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"ras_ids\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" },\n      \"description\": \"Lista de IDs en la BD (UUIDs) de los Resultados de Aprendizaje sugeridos\"\n    },\n    \"nombre_sugerido\": {\n      \"type\": \"string\",\n      \"description\": \"Sugerencia de nombre corto para el programa de formacion\"\n    }\n  },\n  \"required\": [\"ras_ids\", \"nombre_sugerido\"]\n}"
+      },
+      "id": "parser-1",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1,
+      "position": [700, 250]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [ { "node": "Agente Asistente IA", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [ { "node": "Agente Asistente IA", "type": "ai_languageModel", "index": 0 } ]
+      ]
+    },
+    "Supabase Vector Store": {
+      "ai_tool": [
+        [ { "node": "Agente Asistente IA", "type": "ai_tool", "index": 0 } ]
+      ]
+    },
+    "Google Gemini Embeddings": {
+      "ai_embedding": [
+        [ { "node": "Supabase Vector Store", "type": "ai_embedding", "index": 0 } ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [ { "node": "Agente Asistente IA", "type": "ai_outputParser", "index": 0 } ]
+      ]
+    }
+  }
+}

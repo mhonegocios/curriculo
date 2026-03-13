@@ -1,0 +1,720 @@
+{
+  "name": "Cargador_Cualificaciones_Gemini V16",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "fadfe7f0-fbdd-448e-a137-aeb781a356d5",
+      "name": "Inicio Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM cine_f;",
+        "options": {}
+      },
+      "id": "8a798161-8f57-4493-89bf-5d941ddcba1e",
+      "name": "Supabase - Get CINE F",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -912,
+        384
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1NBRUARG96XMiuWatBzG7SIrO7wkRVIbb",
+          "mode": "list",
+          "cachedResultName": "3-AGRO- AGR-001.pdf",
+          "cachedResultUrl": "https://drive.google.com/file/d/1NBRUARG96XMiuWatBzG7SIrO7wkRVIbb/view?usp=drivesdk"
+        },
+        "options": {}
+      },
+      "id": "f613f232-2f96-4848-9d5b-b03099adf7d6",
+      "name": "Google Drive - Listar PDFs",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -912,
+        160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "mSBzB9e6BXbIEWLA",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "169d7627-36a5-4a5d-9a8a-bf19aae8afe3",
+      "name": "Extraer Texto del PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "38c45c00-4ca9-443b-9aa1-547a1076b049",
+      "name": "Merge PDF + CINE F",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -448,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pdfText = $('Extraer Texto del PDF').item.json.text;\nconst fileName = $('Google Drive - Listar PDFs').item.json.name;\n\n// Obtenemos los datos de CINE F desde el Merge (input 2)\nconst cineFData = $('Merge PDF + CINE F').all().filter(item => item.json.id && item.json.descripcion).map(item => item.json);\nconst cineFPrompt = JSON.stringify(cineFData.map(c => ({\n    id: c.id,\n    descripcion: c.descripcion,\n    cinef_detallado: c.cinef_detallado\n})));\n\n// 1. Definimos el cuerpo principal del prompt\nconst promptBody = `Eres un experto en análisis de documentos educativos del Marco Nacional de Cualificaciones de Colombia.\n\nAnaliza el siguiente PDF de cualificación y extrae TODA la información en formato JSON ESTRICTO.\n\nARCHIVO: ${fileName}\n\nAquí tienes una lista de códigos CINE F (Clasificación Internacional Normalizada de la Educación - Campos de Educación y Formación) disponibles en la base de datos:\n${cineFPrompt}\n\nCONTENIDO DEL PDF:\n${pdfText}\n\nDebes extraer:\n\n{\n  \"identificacion\": {\n    \"codigo\": \"código completo ej: 4-TUHG-A&B-004\",\n    \"version\": \"ej: 01 - 2021\",\n    \"fecha_aprobacion\": \"YYYY-MM-DD o null\",\n    \"estado\": \"Vigente|En construcción|Obsoleta\",\n    \"denominacion\": \"nombre del programa\",\n    \"nivel_mnc\": número del 1 al 8,\n    \"area_cualificacion\": \"sector completo\",\n    \"duracion_horas\": número,\n    \"duracion_creditos\": número decimal o null,\n    \"cine_f_id\": \"ID (UUID) del código CINE F más apropiado de la lista proporcionada, basado en el Área de Cualificación\",\n    \"cine_n\": número (90, 91, 92, 93) calculado según las reglas de requisitos de ingreso\n  },\n  \"perfil\": {\n    \"competencia_general\": \"texto completo\",\n    \"sector_productivo\": \"texto\",\n    \"subsector\": \"texto\",\n    \"contexto_accion\": \"texto completo donde se desempeñan\"\n  },\n  \"requisitos_ingreso\": \"Texto completo de los requisitos de ingreso, entrada o acceso a la cualificación (generalmente al final del documento). Si no existen, usar null\",\n  \"ocupaciones_relacionadas\": \"Lista completa separada por ;. SIEMPRE incluye el código de la ocupación junto con el nombre (ej: 6211 - Agricultor). Si no hay código, usa solo el nombre.\",\n  \"competencias_especificas\": [  // ⚠️ IMPORTANTE: usa SIEMPRE esta clave, aunque el documento las llame \"Unidades de Competencia\", \"UC\" o cualquier otra variante. El JSON SIEMPRE debe usar \"competencias_especificas\".\n    {\n      \"codigo\": \"UC1-3-AGRO-AGR-001\",\n      \"denominacion\": \"texto completo\",\n      \"es_transversal\": true|false,\n      \"duracion_horas\": número o null,\n      \"elementos\": [\n        {\n          \"numero\": 1,\n          \"descripcion\": \"texto completo del elemento de competencia\",\n          \"criterios_desempeno\": [\n            \"Texto completo del criterio 1\",\n            \"Texto completo del criterio 2\"\n          ]\n        }\n      ],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"texto completo del resultado de aprendizaje\",\n          \"duracion_horas\": número o null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"texto completo del criterio\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\"texto 1\", \"texto 2\"],\n        \"procedimentales\": [\"texto 1\", \"texto 2\"],\n        \"actitudinales\": [\"texto 1\", \"texto 2\"],\n        \"fuente\": \"extraido\" | \"generado_ia\"\n      }\n    }\n  ]\n}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 INSTRUCCIONES CRÍTICAS PARA CINE N (Niveles de Educación):\n\nDetermina el código CINE N basándote ESTRICTAMENTE en los \"Requisitos de ingreso\":\n\n- **90**: Si NO existen prerrequisitos de ingreso.\n- **91**: Si el requisito es Básica Primaria.\n- **92**: Si el requisito es Básica Secundaria (Grado Noveno).\n- **93**: Si el requisito es Educación Media (Grado Once / Bachiller) O si la cualificación es de Nivel 4 en el MNC.\n\nAnaliza el texto de \"Requisitos de ingreso\" para tomar esta decisión.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 INSTRUCCIONES CRÍTICAS PARA CINE F:\n\n1. Revisa el campo \"Area de Cualificación\" del documento.\n2. Busca en la lista de CINE F proporcionada arriba aquel cuya \"descripcion\" o \"cinef_detallado\" sea la MEJOR coincidencia semántica.\n3. Extrae el UUID correspondiente y ponlo en el campo \"cine_f_id\".\n4. ES OBLIGATORIO SELECCIONAR UNO DE LA LISTA.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 INSTRUCCIONES CRÍTICAS PARA REQUISITOS Y OCUPACIONES:\n\n1. **REQUISITOS DE INGRESO:**\n   - Busca secciones como \"Requisitos de ingreso\", \"Requisitos de entrada\", \"Requisitos de acceso\" o \"Criterios de ingreso\".\n   - Suelen estar hacia el FINAL del documento.\n   - Extrae todo el texto relevante. Si no encuentras nada explícito, devuelve null.\n\n2. **OCUPACIONES RELACIONADAS:**\n   - Busca la tabla o lista de ocupaciones relacionadas.\n   - **FORMATO ESTRICTO:** Debes extraer SIEMPRE el código y el nombre concatenados.\n   - Ejemplo correcto: \"6211 - Agricultor de cultivos transitorios; 6212 - Agricultor de cultivos permanentes\"\n   - Ejemplo INCORRECTO: \"Agricultor; Cultivador\"\n   - Si el PDF tiene una tabla con columnas \"Código\" y \"Denominación\", únelos con \" - \".\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 INSTRUCCIONES CRÍTICAS PARA ELEMENTOS DE COMPETENCIA:\n\n**UBICACIÓN EN EL PDF:**\n- Busca la sección \"UNIDAD DE COMPETENCIA\" en el documento\n- Dentro de cada UC, busca subsecciones \"Elemento de competencia 1:\", \"Elemento de competencia 2:\", etc.\n\n**ESTRUCTURA OBLIGATORIA:**\nNUNCA extraigas elementos como: [\"string1\", \"string2\", \"string3\"]\nSIEMPRE debe ser un array de OBJETOS con esta estructura:\n\n{\n  \"numero\": 1,\n  \"descripcion\": \"Determinar aspectos técnicos de la producción agrícola de acuerdo con las demandas del mercado y las técnicas y métodos de producción\",\n  \"criterios_desempeno\": [\n    \"La selección de especies agrícolas a producir corresponde con las condiciones de la zona geográfica y las demandas del mercado\",\n    \"El cálculo de los requerimientos de recursos físicos, económicos, técnicos y humanos en la producción agrícola corresponde con las necesidades del cultivo y recomendaciones técnicas\"\n  ]\n}\n\n**PASOS PARA EXTRAER:**\n\n1. **Identificar el número del elemento:**\n   - \"Elemento de competencia 1:\" → numero: 1\n   - \"Elemento de competencia 2:\" → numero: 2\n\n2. **Extraer la descripción:**\n   - Es el texto que aparece después de \"Elemento de competencia X:\"\n   - Copia TODO el texto hasta que empiece la sección \"Criterios de desempeño\"\n\n3. **Extraer criterios de desempeño:**\n   - Busca DEBAJO del elemento la subsección \"Criterios de desempeño\"\n   - Los criterios empiezan con viñetas (•) o guiones (-)\n   - Cada criterio es una oración completa\n   - Extrae TODOS los criterios asociados a ese elemento específico\n   - Si no hay criterios explícitos, usa array vacío []\n\n**EJEMPLO DE EXTRACCIÓN CORRECTA:**\n\nSi el PDF dice:\n\n\"Elemento de competencia 1: Determinar aspectos técnicos de la producción agrícola...\n\nCriterios de desempeño\n- La selección de especies agrícolas a producir corresponde...\n- El cálculo de los requerimientos de recursos físicos...\n- La estimación de volúmenes y variables de producción...\"\n\nDebes extraer:\n\n{\n  \"numero\": 1,\n  \"descripcion\": \"Determinar aspectos técnicos de la producción agrícola de acuerdo con las demandas del mercado y las técnicas y métodos de producción\",\n  \"criterios_desempeno\": [\n    \"La selección de especies agrícolas a producir corresponde con las condiciones de la zona geográfica y las demandas del mercado\",\n    \"El cálculo de los requerimientos de recursos físicos, económicos, técnicos y humanos en la producción agrícola corresponde con las necesidades del cultivo y recomendaciones técnicas\",\n    \"La estimación de volúmenes y variables de producción agrícola corresponde con los ciclos de cultivo y las demandas del mercado\"\n  ]\n}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 INSTRUCCIONES CRÍTICAS PARA RESULTADOS DE APRENDIZAJE:\n\n**UBICACIÓN EN EL PDF:**\n- Busca la sección \"UNIDAD DE APRENDIZAJE\" en el documento\n- Dentro de cada UA, busca subsecciones \"Resultado de aprendizaje 1:\", \"Resultado de aprendizaje 2:\", etc.\n\n**ESTRUCTURA OBLIGATORIA:**\n\n{\n  \"codigo\": \"RA1\",\n  \"descripcion\": \"Plantear distintos tipos de producción agrícola en función de las condiciones agroclimáticas y características y tendencias del mercado\",\n  \"duracion_horas\": 40,\n  \"criterios_evaluacion\": [\n    {\n      \"codigo\": \"CE1\",\n      \"descripcion\": \"Identifica las características del mercado teniendo en cuenta el sistema productivo agrícola\"\n    },\n    {\n      \"codigo\": \"CE2\",\n      \"descripcion\": \"Valora las condiciones edafoclimáticas según criterios técnicos y necesidades del cultivo\"\n    }\n  ]\n}\n\n**PASOS PARA EXTRAER:**\n\n1. **Código del resultado:**\n   - \"Resultado de aprendizaje 1:\" → codigo: \"RA1\"\n   - \"Resultado de aprendizaje 2:\" → codigo: \"RA2\"\n\n2. **Descripción:**\n   - Es el texto que aparece después de \"Resultado de aprendizaje X:\"\n   - Copia TODO hasta que empiece \"Criterios de evaluación\"\n\n3. **Duración en horas:**\n   - Busca si se especifica duración\n   - Si no aparece, usa null\n\n4. **Criterios de evaluación:**\n   - Busca la subsección \"Criterios de evaluación\" DEBAJO del resultado\n   - Cada criterio tiene un código (CE1, CE2, etc.) y una descripción\n   - Extrae TODOS los criterios asociados\n   - Si no hay criterios, usa array vacío []\n\n**EJEMPLO DE EXTRACCIÓN CORRECTA:**\n\nSi el PDF dice:\n\n\"Resultado de aprendizaje 1: Plantear distintos tipos de producción agrícola...\n\nCriterios de evaluación\nCE1. Identifica las características del mercado teniendo en cuenta...\nCE2. Valora las condiciones edafoclimáticas según criterios técnicos...\nCE3. Define el tipo de sistema productivo agrícola en correspondencia...\"\n\nDebes extraer:\n\n{\n  \"codigo\": \"RA1\",\n  \"descripcion\": \"Plantear distintos tipos de producción agrícola en función de las condiciones agroclimáticas y características y tendencias del mercado\",\n  \"duracion_horas\": null,\n  \"criterios_evaluacion\": [\n    {\n      \"codigo\": \"CE1\",\n      \"descripcion\": \"Identifica las características del mercado teniendo en cuenta el sistema productivo agrícola\"\n    },\n    {\n      \"codigo\": \"CE2\",\n      \"descripcion\": \"Valora las condiciones edafoclimáticas según criterios técnicos y necesidades del cultivo\"\n    },\n    {\n      \"codigo\": \"CE3\",\n      \"descripcion\": \"Define el tipo de sistema productivo agrícola en correspondencia con las condiciones agroclimáticas y tipos de mercado\"\n    }\n  ]\n}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 INSTRUCCIONES CRÍTICAS PARA LOS CONTENIDOS (EXTRACCIÓN ESTRICTA):\n\n**OBJETIVO:** Extraer los contenidos (saberes) tal como aparecen en el documento. **NO INVENTAR NI GENERAR INFORMACIÓN.**\n\nBusca en cada Unidad de Aprendizaje (UA) la sección titulada:\n- \"Contenidos (del saber, saber hacer, saber ser)\"\n- \"Contenidos curriculares\"\n- \"Saberes\"\n- O cualquier variación similar\n\nLa tabla típicamente tiene 3 COLUMNAS:\n┌───────────────┬──────────────────┬────────────────┐\n│ Conceptuales  │ Procedimentales  │ Actitudinales  │\n│ (SABER)       │ (SABER HACER)    │ (SABER SER)    │\n└───────────────┴──────────────────┴────────────────┘\n\nSi encuentras esta tabla:\n→ Extrae TODO el texto de cada columna TAL CUAL aparece\n→ Cada párrafo o ítem = 1 elemento del array\n→ NO resumas, copia COMPLETO\n→ Marca: \"fuente\": \"extraido\"\n\n**PASO 2: SI NO EXISTE LA TABLA, GENERAR CON IA**\n\nSi después de revisar toda la Unidad de Aprendizaje NO encuentras una tabla de contenidos explícita:\n\n🧠 **GENERA contenidos coherentes basándote en:**\n\n1. **Para CONCEPTUALES (Saber teórico)**:\n   - Analiza la denominación de la competencia\n   - Analiza los elementos de competencia\n   - Analiza los criterios de desempeño\n   - Infiere qué conocimientos teóricos necesita dominar\n   - Formato: \"Concepto: definición, tipos, características, aplicación\"\n   - Genera 8-15 ítems\n\n2. **Para PROCEDIMENTALES (Saber hacer)**:\n   - Convierte los criterios de desempeño en habilidades\n   - Usa verbos de acción: \"Aplicación de...\", \"Manejo de...\", \"Uso de...\"\n   - Genera 6-12 ítems\n\n3. **Para ACTITUDINALES (Saber ser)**:\n   - Infiere valores, actitudes y comportamientos profesionales\n   - Usa sustantivos: \"Rigurosidad en...\", \"Disposición a...\", \"Capacidad de...\"\n   - Genera 4-8 ítems\n\n→ Marca: \"fuente\": \"generado_ia\"\n\n**VALIDACIÓN FINAL DE CONTENIDOS:**\n- TODA competencia DEBE tener su objeto \"contenidos\"\n- TODA competencia DEBE tener las 3 llaves (conceptuales, procedimentales, actitudinales) + \"fuente\"\n- Los arrays NO pueden estar vacíos (mínimo 3 ítems cada uno)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🔴 REGLAS CRÍTICAS GENERALES:\n\n1. Si un campo no existe en el documento, usa null o []\n2. NO inventes información de identificación o perfiles\n3. Responde ÚNICAMENTE con el JSON, sin texto adicional\n4. NO uses markdown (sin \\`\\`\\`json ni \\`\\`\\`)\n5. Asegúrate de que sea JSON válido\n6. CIERRA TODAS las llaves y corchetes correctamente\n7. Prioriza COMPLETAR el JSON sobre ser perfecto\n8. Los elementos NUNCA son strings simples, SIEMPRE objetos\n9. Los resultados de aprendizaje NUNCA son strings simples, SIEMPRE objetos\n10. Mantén la precisión en los códigos (UC1, RA1, CE1, etc.)\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nFORMATO FINAL ESPERADO:\n\nEl JSON debe poder parsearse directamente sin errores.\nCada competencia debe tener TODAS sus partes completas.\nVerifica que hayas cerrado todos los corchetes y llaves antes de terminar.`;\n\n// 2. Definimos las instrucciones de formato (ESTO ERA LO QUE DABA ERROR ANTES)\n// Nota: Las barras invertidas antes de las comillas ( \\` ) son necesarias aquí\nconst instruccionesFinales = `\nRESPONDE ÚNICAMENTE CON EL JSON PURO\nNO uses bloques de código markdown\nNO agregues texto antes o después del JSON\nLa respuesta debe comenzar directamente con el carácter { y terminar con }\n\nEjemplo de respuesta CORRECTA:\n{\n  \"identificacion\": {...}\n}\n\nEjemplo de respuesta INCORRECTA (NO hagas esto):\n- No incluyas \"\\`\\`\\`json\" al inicio\n- No incluyas \"\\`\\`\\`\" al final\n- No agregues explicaciones antes o después\n`;\n\n// 3. Unimos todo y devolvemos el resultado\nreturn {\n  json: {\n    prompt: promptBody + \"\\n\" + instruccionesFinales,\n    fileName: fileName\n  }\n};"
+      },
+      "id": "da050f02-a65d-4778-99a1-8499db5bbfe6",
+      "name": "Preparar Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Nodo: Validar y Limpiar JSON (Versión Robusta / Depuración)\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  // 1. ESTRATEGIA DE BÚSQUEDA DE CONTENIDO\n  // Buscamos la respuesta en todos los lugares conocidos donde Gemini/n8n suele ponerla\n  let rawResponse = \n    item.json.text || \n    item.json.output || \n    item.json.content || \n    item.json.response ||\n    (item.json.candidates && item.json.candidates[0]?.content?.parts?.[0]?.text);\n\n  // Si aún es null, buscamos cualquier string largo en el objeto (último recurso)\n  if (!rawResponse) {\n    for (const key in item.json) {\n      if (typeof item.json[key] === 'string' && item.json[key].length > 100) {\n        rawResponse = item.json[key];\n        break;\n      }\n    }\n  }\n\n  // 2. MANEJO DE ERRORES DE ENTRADA\n  if (!rawResponse) {\n    // Si llegamos aquí, Gemini no devolvió texto. Analizamos por qué.\n    let errorMsg = 'No se encontró respuesta de Gemini.';\n    \n    // Verificar si fue bloqueado por seguridad\n    if (item.json.finishReason === 'SAFETY' || item.json.finishReason === 'BLOCKOUT') {\n      errorMsg = 'Gemini bloqueó la respuesta por \"Safety Settings\". Ve al nodo Gemini -> Options -> Safety Settings y pon todo en \"Block None\".';\n    } else if (item.json.finishReason === 'RECITATION') {\n      errorMsg = 'Gemini bloqueó la respuesta por Copyright (Recitation).';\n    }\n\n    results.push({\n      json: {\n        status: 'error',\n        error: errorMsg,\n        debug_keys_found: Object.keys(item.json), // Para que veas qué llaves llegaron\n        full_input: item.json // Para depuración\n      }\n    });\n    continue;\n  }\n\n  try {\n    let cleanJson = rawResponse.toString().trim();\n    \n    // 3. LIMPIEZA DE MARKDOWN\n    cleanJson = cleanJson.replace(/^```json\\s*/i, '');  \n    cleanJson = cleanJson.replace(/^```\\s*/i, '');      \n    cleanJson = cleanJson.replace(/\\s*```\\s*$/i, '');   \n    cleanJson = cleanJson.trim();\n    \n    // 4. INTENTO DE PARSEO DIRECTO\n    try {\n      const parsed = JSON.parse(cleanJson);\n      results.push({\n        json: {\n          status: 'success',\n          cualificacion: parsed,\n          rawResponse: rawResponse,\n          wasRepaired: false\n        }\n      });\n      continue;\n      \n    } catch (parseError) {\n      // Falló el parseo directo, pasamos a reparación\n    }\n    \n    // 5. REPARACIÓN DE JSON TRUNCADO\n    // Buscar el último carácter de cierre válido\n    const lastComma = cleanJson.lastIndexOf(',');\n    const lastCloseBrace = cleanJson.lastIndexOf('}');\n    const lastCloseBracket = cleanJson.lastIndexOf(']');\n    \n    // Si el final no es limpio, cortamos hasta lo seguro\n    if (!cleanJson.match(/[\\\"\\}\\]]$/)) {\n      const safePositions = [lastComma, lastCloseBrace, lastCloseBracket].filter(p => p > 0);\n      if (safePositions.length > 0) {\n        const safeCutPosition = Math.max(...safePositions);\n        cleanJson = cleanJson.substring(0, safeCutPosition + 1);\n      }\n    }\n    \n    // Quitar coma final si existe\n    cleanJson = cleanJson.replace(/,(\\s*)$/, '$1');\n    \n    // Balancear llaves y corchetes\n    const openBraces = (cleanJson.match(/\\{/g) || []).length;\n    const closeBraces = (cleanJson.match(/\\}/g) || []).length;\n    const openBrackets = (cleanJson.match(/\\[/g) || []).length;\n    const closeBrackets = (cleanJson.match(/\\]/g) || []).length;\n    \n    for (let i = 0; i < (openBrackets - closeBrackets); i++) cleanJson += ']';\n    for (let i = 0; i < (openBraces - closeBraces); i++) cleanJson += '}';\n    \n    const parsed = JSON.parse(cleanJson);\n    \n    results.push({\n      json: {\n        status: 'success',\n        cualificacion: parsed,\n        rawResponse: rawResponse,\n        wasRepaired: true,\n        warning: 'El JSON fue reparado automáticamente'\n      }\n    });\n    \n  } catch (error) {\n    results.push({\n      json: {\n        status: 'error',\n        error: 'Fallo al parsear JSON incluso después de reparar: ' + error.message,\n        rawResponse: rawResponse\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "6a1c19a2-e814-43a7-8c9b-cc0a28b375f8",
+      "name": "Validar y Limpiar JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "2359bc16-e3b9-4cd7-b5b1-aa552a102d4a",
+      "name": "¿JSON Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        288,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO cualificaciones_cnc (\n  codigo, \n  version, \n  fecha_aprobacion, \n  estado, \n  denominacion, \n  nivel_mnc, \n  area_cualificacion, \n  duracion_horas, \n  duracion_creditos, \n  competencia_general, \n  sector_productivo, \n  subsector, \n  contexto_accion,\n  ocupaciones_relacionadas,\n  requisitos_ingreso,\n  cine_n,\n  cinef_amplio,\n  cinef_especifico,\n  cinef_detallado\n)\nVALUES (\n  '{{ String($json.cualificacion.identificacion.codigo || \"\").replace(/'/g, \"''\") }}',\n  '{{ String($json.cualificacion.identificacion.version || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.cualificacion.identificacion.fecha_aprobacion ? \"'\" + $json.cualificacion.identificacion.fecha_aprobacion + \"'\" : \"NULL\" }},\n  '{{ String($json.cualificacion.identificacion.estado || \"\").replace(/'/g, \"''\") }}',\n  '{{ String($json.cualificacion.identificacion.denominacion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.cualificacion.identificacion.nivel_mnc || \"NULL\" }},\n  '{{ String($json.cualificacion.identificacion.area_cualificacion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.cualificacion.identificacion.duracion_horas || \"NULL\" }},\n  {{ $json.cualificacion.identificacion.duracion_creditos || \"NULL\" }},\n  '{{ String($json.cualificacion.perfil.competencia_general || \"\").replace(/'/g, \"''\") }}',\n  '{{ String($json.cualificacion.perfil.sector_productivo || \"\").replace(/'/g, \"''\") }}',\n  '{{ String($json.cualificacion.perfil.subsector || \"\").replace(/'/g, \"''\") }}',\n  '{{ String($json.cualificacion.perfil.contexto_accion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.cualificacion.ocupaciones_relacionadas ? \"'\" + String($json.cualificacion.ocupaciones_relacionadas).replace(/'/g, \"''\") + \"'\" : \"NULL\" }},\n  {{ $json.cualificacion.requisitos_ingreso ? \"'\" + String($json.cualificacion.requisitos_ingreso).replace(/'/g, \"''\") + \"'\" : \"NULL\" }},\n  {{ $json.cualificacion.identificacion.cine_n || \"NULL\" }},\n  (SELECT amplio FROM cine_f WHERE id = '{{ $json.cualificacion.identificacion.cine_f_id }}'),\n  (SELECT especifico FROM cine_f WHERE id = '{{ $json.cualificacion.identificacion.cine_f_id }}'),\n  (SELECT cinef_detallado FROM cine_f WHERE id = '{{ $json.cualificacion.identificacion.cine_f_id }}')\n)\nRETURNING id;",
+        "options": {}
+      },
+      "id": "550b8f54-cdff-4f75-939b-2101e18e5e91",
+      "name": "Supabase - Insertar Cualificación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        544,
+        144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "options": {
+          "maxOutputTokens": 65536
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -112
+      ],
+      "id": "8355417e-dcf5-4f87-b597-8bc1234da81a",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "QpyFgg388EdoFayA",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cualificacionId = $('Supabase - Insertar Cualificación').first().json.id;\nconst cualificacion = $('Validar y Limpiar JSON').first().json.cualificacion;\nconst competencias = cualificacion.competencias_especificas || [];\n\nconst items = competencias.map((comp, index) => ({\n  json: {\n    cualificacion_id: cualificacionId,\n    codigo: comp.codigo || '',\n    denominacion: comp.denominacion || '',\n    es_transversal: comp.es_transversal || false,\n    duracion_horas: comp.duracion_horas || null,\n    orden_secuencia: index + 1\n  }\n}));\n\nreturn items;"
+      },
+      "id": "b1a1a1a1-0001-4000-a001-000000000001",
+      "name": "Preparar Competencias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO competencias_especificas_cnc (\n  cualificacion_id, codigo, denominacion, es_transversal, orden_secuencia, duracion_horas\n) VALUES (\n  '{{ $json.cualificacion_id }}',\n  '{{ $json.codigo }}',\n  '{{ String($json.denominacion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.es_transversal }},\n  {{ $json.orden_secuencia }},\n  {{ $json.duracion_horas || \"NULL\" }}\n)\nRETURNING id, codigo;",
+        "options": {}
+      },
+      "id": "b1a1a1a1-0002-4000-a002-000000000002",
+      "name": "Supabase - Insertar Competencia",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1056,
+        144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const competenciasDB = $('Supabase - Insertar Competencia').all();\nconst cualificacion = $('Validar y Limpiar JSON').first().json.cualificacion;\nconst competenciasOrig = cualificacion.competencias_especificas || [];\n\nconst codigoToId = {};\nfor (const c of competenciasDB) {\n  codigoToId[c.json.codigo] = c.json.id;\n}\n\nconst items = [];\nfor (const comp of competenciasOrig) {\n  const competenciaId = codigoToId[comp.codigo];\n  if (!competenciaId || !comp.elementos || comp.elementos.length === 0) continue;\n\n  for (const elem of comp.elementos) {\n    items.push({\n      json: {\n        competencia_id: competenciaId,\n        numero_elemento: elem.numero,\n        descripcion: elem.descripcion\n      }\n    });\n  }\n}\n\nreturn items;"
+      },
+      "id": "b1a1a1a1-0003-4000-a003-000000000003",
+      "name": "Preparar Elementos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO elementos_competencia_cnc (\n  competencia_id, numero_elemento, descripcion\n) VALUES (\n  '{{ $json.competencia_id }}',\n  {{ $json.numero_elemento }},\n  '{{ String($json.descripcion || \"\").replace(/'/g, \"''\") }}'\n)\nRETURNING id, competencia_id, numero_elemento;",
+        "options": {}
+      },
+      "id": "b1a1a1a1-0004-4000-a004-000000000004",
+      "name": "Supabase - Insertar Elementos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const elementosDB = $('Supabase - Insertar Elementos').all();\nconst competenciasDB = $('Supabase - Insertar Competencia').all();\nconst cualificacion = $('Validar y Limpiar JSON').first().json.cualificacion;\n\nconst idToCodigo = {};\nfor (const c of competenciasDB) {\n  idToCodigo[c.json.id] = c.json.codigo;\n}\n\nconst compMap = {};\nfor (const comp of (cualificacion.competencias_especificas || [])) {\n  compMap[comp.codigo] = comp;\n}\n\nconst items = [];\nfor (const elem of elementosDB) {\n  const elemId = elem.json.id;\n  const compCodigo = idToCodigo[elem.json.competencia_id];\n  if (!compCodigo) continue;\n\n  const origComp = compMap[compCodigo];\n  if (!origComp || !origComp.elementos) continue;\n\n  const origElem = origComp.elementos.find(e => e.numero === elem.json.numero_elemento);\n  if (!origElem || !origElem.criterios_desempeno) continue;\n\n  origElem.criterios_desempeno.forEach((criterio, idx) => {\n    items.push({\n      json: {\n        elemento_id: elemId,\n        descripcion: criterio,\n        orden: idx + 1\n      }\n    });\n  });\n}\n\nreturn items;"
+      },
+      "id": "b1a1a1a1-0005-4000-a005-000000000005",
+      "name": "Preparar Criterios Desempeño",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO criterios_desempeno_cnc (\n  elemento_id, descripcion, orden\n) VALUES (\n  '{{ $json.elemento_id }}',\n  '{{ String($json.descripcion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.orden }}\n);",
+        "options": {}
+      },
+      "id": "b1a1a1a1-0006-4000-a006-000000000006",
+      "name": "Supabase - Insertar Criterios Desempeño",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2080,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const competenciasDB = $('Supabase - Insertar Competencia').all();\nconst cualificacion = $('Validar y Limpiar JSON').first().json.cualificacion;\n\nconst codigoToId = {};\nfor (const c of competenciasDB) {\n  codigoToId[c.json.codigo] = c.json.id;\n}\n\nconst items = [];\nfor (const comp of (cualificacion.competencias_especificas || [])) {\n  const competenciaId = codigoToId[comp.codigo];\n  if (!competenciaId || !comp.resultados_aprendizaje) continue;\n\n  comp.resultados_aprendizaje.forEach((ra, idx) => {\n    items.push({\n      json: {\n        competencia_id: competenciaId,\n        competencia_codigo: comp.codigo,\n        codigo: ra.codigo,\n        descripcion: ra.descripcion,\n        duracion_horas: ra.duracion_horas || null,\n        orden: idx + 1\n      }\n    });\n  });\n}\n\nreturn items;"
+      },
+      "id": "b1a1a1a1-0007-4000-a007-000000000007",
+      "name": "Preparar Resultados Aprendizaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO resultados_aprendizaje_cnc (\n  competencia_id, codigo, descripcion, duracion_horas, orden\n) VALUES (\n  '{{ $json.competencia_id }}',\n  '{{ $json.codigo }}',\n  '{{ String($json.descripcion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.duracion_horas || \"NULL\" }},\n  {{ $json.orden }}\n)\nRETURNING id, competencia_id, codigo;",
+        "options": {}
+      },
+      "id": "b1a1a1a1-0008-4000-a008-000000000008",
+      "name": "Supabase - Insertar Resultados Aprendizaje",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rasDB = $('Supabase - Insertar Resultados Aprendizaje').all();\nconst competenciasDB = $('Supabase - Insertar Competencia').all();\nconst cualificacion = $('Validar y Limpiar JSON').first().json.cualificacion;\n\nconst idToCodigo = {};\nfor (const c of competenciasDB) {\n  idToCodigo[c.json.id] = c.json.codigo;\n}\n\nconst compMap = {};\nfor (const comp of (cualificacion.competencias_especificas || [])) {\n  compMap[comp.codigo] = comp;\n}\n\nconst items = [];\nfor (const ra of rasDB) {\n  const raId = ra.json.id;\n  const compCodigo = idToCodigo[ra.json.competencia_id];\n  if (!compCodigo) continue;\n\n  const origComp = compMap[compCodigo];\n  if (!origComp || !origComp.resultados_aprendizaje) continue;\n\n  const origRA = origComp.resultados_aprendizaje.find(r => r.codigo === ra.json.codigo);\n  if (!origRA || !origRA.criterios_evaluacion) continue;\n\n  origRA.criterios_evaluacion.forEach((ce, idx) => {\n    items.push({\n      json: {\n        resultado_aprendizaje_id: raId,\n        codigo: ce.codigo,\n        descripcion: ce.descripcion,\n        orden: idx + 1\n      }\n    });\n  });\n}\n\nreturn items;"
+      },
+      "id": "b1a1a1a1-0009-4000-a009-000000000009",
+      "name": "Preparar Criterios Evaluación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO criterios_evaluacion_cnc (\n  resultado_aprendizaje_id, codigo, descripcion, orden\n) VALUES (\n  '{{ $json.resultado_aprendizaje_id }}',\n  '{{ $json.codigo }}',\n  '{{ String($json.descripcion || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.orden }}\n);",
+        "options": {}
+      },
+      "id": "b1a1a1a1-000a-4000-a00a-000000000010",
+      "name": "Supabase - Insertar Criterios Evaluación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2080,
+        144
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const competenciasDB = $('Supabase - Insertar Competencia').all();\nconst cualificacion = $('Validar y Limpiar JSON').first().json.cualificacion;\n\nconst codigoToId = {};\nfor (const c of competenciasDB) {\n  codigoToId[c.json.codigo] = c.json.id;\n}\n\nconst items = [];\nfor (const comp of (cualificacion.competencias_especificas || [])) {\n  const competenciaId = codigoToId[comp.codigo];\n  if (!competenciaId || !comp.contenidos) continue;\n\n  const contenidos = comp.contenidos;\n  const fuente = contenidos.fuente || 'extraido';\n\n  const tipos = {\n    conceptual: contenidos.conceptuales || [],\n    procedimental: contenidos.procedimentales || [],\n    actitudinal: contenidos.actitudinales || []\n  };\n\n  for (const [tipo, lista] of Object.entries(tipos)) {\n    lista.forEach((texto, idx) => {\n      items.push({\n        json: {\n          competencia_id: competenciaId,\n          tipo: tipo,\n          contenido: texto,\n          orden: idx + 1,\n          fuente: fuente\n        }\n      });\n    });\n  }\n}\n\nreturn items;"
+      },
+      "id": "b1a1a1a1-000b-4000-a00b-000000000011",
+      "name": "Preparar Conocimientos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        388
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conocimientos_esenciales_cnc (\n  competencia_id, tipo, contenido, orden, fuente\n) VALUES (\n  '{{ $json.competencia_id }}',\n  '{{ $json.tipo }}',\n  '{{ String($json.contenido || \"\").replace(/'/g, \"''\") }}',\n  {{ $json.orden }},\n  '{{ $json.fuente }}'\n);",
+        "options": {}
+      },
+      "id": "b1a1a1a1-000c-4000-a00c-000000000012",
+      "name": "Supabase - Insertar Conocimientos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1568,
+        388
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "FOBUkOXgCJvVSWYn",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Message a model": [
+      {
+        "json": {
+          "candidates": [
+            {
+              "content": {
+                "parts": [
+                  {
+                    "text": "{\n  \"identificacion\": {\n    \"codigo\": \"3-AGRO-AGR-001\",\n    \"version\": \"Preliminar\",\n    \"fecha_aprobacion\": null,\n    \"estado\": \"En construcción\",\n    \"denominacion\": \"Producción agrícola\",\n    \"nivel_mnc\": 3,\n    \"area_cualificacion\": \"Agropecuaria y Veterinaria - AGVE\",\n    \"duracion_horas\": 1000,\n    \"duracion_creditos\": null,\n    \"cine_f_id\": \"7d8f39ef-34d9-4871-a96c-9efa0ab8977f\",\n    \"cine_n\": 92\n  },\n  \"perfil\": {\n    \"competencia_general\": \"Organizar, coordinar e implementar labores culturales y de comercialización en sistemas productivos agrícolas en concordancia con las condiciones agroecológicas y las tendencias del mercado.\",\n    \"sector_productivo\": \"Sector Agropecuario\",\n    \"subsector\": \"subsector agrícola\",\n    \"contexto_accion\": \"Unidades de producción primaria y de transformación rural (pequeñas, medianas y grandes) y organizaciones o asociaciones de productores agrícolas.\"\n  },\n  \"requisitos_ingreso\": \"Certificado de estudios de educación básica secundaria (noveno grado), según la legislación colombiana (culminado).\",\n  \"ocupaciones_relacionadas\": \"6111- Agricultores y trabajadores calificados de cultivos extensivos; Agricultor cultivador; Agricultor de cultivo de algodón; Agricultor de cultivo de arroz; Agricultor de cultivo de caña de azúcar; Agricultor de cultivo de cebolla; Agricultor de cultivo de cereales; Agricultor de cultivo de cilantro; Agricultor de cultivo de frijol; Agricultor de cultivo de habichuela; Agricultor de cultivo de hortalizas; Agricultor de cultivo de lechuga; Agricultor de cultivo de maíz; Agricultor de cultivo de melón; Agricultor de cultivo de ñame; Agricultor de cultivo de papa; Agricultor de cultivo de pepino; Agricultor de cultivo de perejil; Agricultor de cultivo de pimientos y ajíes; Agricultor de cultivo de remolacha; Agricultor de cultivo de repollo; Agricultor de cultivo de sandía; Agricultor de cultivo de soya; Agricultor de cultivo de tabaco; Agricultor de cultivo de tomate; Agricultor de cultivo de tubérculos; Agricultor de cultivo de yuca; Agricultor de cultivo de zanahoria; Agricultor de cultivos extensivos; Agricultor de cultivos transitorios; Coordinador de poscosecha; Cultivador de algodón; Cultivador de arroz; Cultivador de caña de azúcar; Cultivador de cereales; Cultivador de papa; Cultivador de tabaco rubio; Cultivador de tubérculos; Operario para la explotación agrícola; Parcelero agrícola; Supervisor agrícola de cultivos extensivos; Supervisor de aprovechamiento agrícola; Supervisor de cultivo de caña azúcar; Supervisor de extensión agrícola; Supervisor de producción agrícola; Trabajador agrícola de algodón; Trabajador agrícola de arroz; Trabajador agrícola de caña de azúcar; Trabajador agrícola de cultivos de trigo; Trabajador agrícola de cultivos del campo; Trabajador agrícola de cultivos extensivos; Trabajador agrícola de cultivos transitorios; Trabajador agrícola de hortalizas; 6112- Agricultores y trabajadores calificados de plantaciones de árboles y arbustos; Agricultor de árboles y arbustos; Agricultor de cultivo de aguacate; Agricultor de cultivo de banano; Agricultor de cultivo de cacao; Agricultor de cultivo de café; Agricultor de cultivo de caucho; Agricultor de cultivo de coco; Agricultor de cultivo de durazno; Agricultor de cultivo de frutales; Agricultor de cultivo de limón; Agricultor de cultivo de mandarina; Agricultor de cultivo de mango; Agricultor de cultivo de naranja; Agricultor de cultivo de palma africana; Agricultor de cultivo de papaya; Agricultor de cultivo de peras; Agricultor de cultivo de piña; Agricultor de cultivo de plantas aromáticas; Agricultor de cultivo de plátano; Agricultor de cultivo de té; Agricultor de cultivos permanentes; Agricultor de fruta; Agricultor de plantación de cocos; Caficultor; Cultivador de arboles; Cultivador de cacao; Cultivador de café; Cultivador de frutales; Cultivador de plantación de caucho; Cultivador de tabaco negro; Cultivador de vid; Fruticultor; Garruchero; Injertador de arboles; Podador de árboles frutales; Recolector de caucho; Sangrador de árboles; Sangrador de árboles de caucho; Supervisor de cultivo de café; Supervisor de cultivo de frutas; Trabajador agrícola de café; Vinicultor; Viticultor; 6113-Agricultores y trabajadores calificados de huertas, invernaderos, viveros y jardines; Agricultor de cultivo de césped, grama o pasto; Agricultor de cultivo de flor de corte; Agricultor de cultivo de flores; Agricultor de cultivo de hongos; Agricultor de cultivo de plantas medicinales y especias; Agricultor de cultivo hidropónicos; Agricultor de viveros ornamentales; Cultivador de flores; Cultivador de hongos; Cultivador de hortalizas de invernadero; Cultivador de pastos; Cultivador de semillas; Cultivador de setas y champiñones; Cultivador de viveros; Floricultor; Hortelano; Horticultor; Horticultor de vivero; Jardinero; Jardinero de parques; Jardinero de viveros; Jardinero en mantenimiento de áreas verdes y jardines privados; Jardinero paisajista; Supervisor de cultivo de flores; Supervisor de mantenimiento de jardines; Supervisor de mantenimiento de prados; Supervisor de vivero; Trabajador agrícola de flores de corte; Trabajador agrícola de horticultura; Trabajador agrícola de viveros; Trabajador de cultivos hidropónicos; Trabajador de invernáculo; Trabajador de vivero forestal; Viverista; Viverista forestal; 6114 -Agricultores y trabajadores calificados de cultivos mixtos; Agricultor de cultivos mixtos para el mercado; Capataz agrícola; Capataz de cuadrilla de recolección; Supervisor de campo explotación agrícola; Supervisor de cuadrilla de aprovechamiento agrícola; Supervisor de empaque de postcosecha; Supervisor de postcosecha; Trabajador agrícola de cultivos mixtos; Trabajador agrícola de policultivos; 6130-Productores y trabajadores calificados de explotaciones agropecuarias mixtas cuya producción se destina al mercado; Capataz agropecuario; Capataz de finca; Capataz de hacienda; Caporal; Productor agropecuario de explotación mixta; Trabajador agropecuario de explotación mixta; 6310-Trabajadores Agrícolas de subsistencia; Agricultor de cultivo de subsistencia; Cultivador de hortalizas de subsistencia; 6330-Trabajadores Agropecuarios de subsistencia; Trabajador agropecuario de subsistencia; 7544-Fumigadores y otros controladores de plagas y malas hierbas; Controlador de malas hierbas; Controlador de plagas; Desratizador; Exterminador de plagas; Fumigador; Fumigador agrícola; Operario de control de plagas; 8341-Operadores de maquinaria agrícola y forestal móvil; Operador de máquina agrícola; Operador de máquina cosechadora; Operador de máquina taladora de arboles; Operador de maquinaria agrícola; Operador de maquinaria de explotación forestal; Operador de recolector agrícola; Operador de segadora; Operador de sembradora; Operador de tractor; Operador de tractor agrícola; Operador de tren cañero; Operador de trilladora; Operador desmotadora de algodón; 8160-Operadores de maquinaría para elaborar alimentos y productos afines; Molinero de arroz; Operador de descerezadora de café; Operador de despulpadora de café; Operador de máquina de molienda de arroz; Operador de máquina tostadora de café; Operador de molino de arroz; Secador de café; Secador de granos (excepto café); Agente de servicio de campo agrícola; Tostador de cacao; Tostador de café; Trapichero de caña de azúcar; Trillador de granos; Tractorista; operario de cosecha; operador de picadora; operador de molino; operarios de máquina de confección textil industrial; mecánico de cosechadora; maquinista; prensero; conductor; deschuponador; platero; expertos Hass; injertador; viverista; obreros de mano; semillerista o coordinador de vivero\",\n  \"competencias_especificas\": [\n    {\n      \"codigo\": \"UC1-3-AGRO-AGR-001\",\n      \"denominacion\": \"Planificar la producción agrícola conforme a las necesidades del cultivo y las proyecciones comerciales.\",\n      \"es_transversal\": false,\n      \"duracion_horas\": 110,\n      \"elementos\": [\n        {\n          \"numero\": 1,\n          \"descripcion\": \"Determinar aspectos técnicos de la producción agrícola de acuerdo con las demandas del mercado y las técnicas y métodos de producción.\",\n          \"criterios_desempeno\": [\n            \"La selección de especies agrícolas a producir corresponde con las condiciones de la zona geográfica y las demandas del mercado.\",\n            \"El cálculo de los requerimientos de recursos físicos, económicos, técnicos y humanos en la producción agrícola corresponde con las necesidades del cultivo y recomendaciones técnicas.\",\n            \"La estimación de volúmenes y variables de producción agrícola corresponde con los ciclos de cultivo y las demandas del mercado.\",\n            \"La estimación de costos de producción corresponde con la proyección de la inversión y las condiciones del mercado.\"\n          ]\n        },\n        {\n          \"numero\": 2,\n          \"descripcion\": \"Programar las actividades productivas agrícolas según las necesidades del cultivo y los recursos disponibles en la unidad productiva.\",\n          \"criterios_desempeno\": [\n            \"El aprovisionamiento de insumos, maquinaria y equipos está acorde con las necesidades de los procesos productivos agrícolas.\",\n            \"El establecimiento de tareas a realizar cumple con las necesidades de las necesidades del proceso productivo.\",\n            \"La gestión de recursos físicos, económicos y ambientales corresponde con la programación de actividades y requerimientos de los procesos productivos.\",\n            \"La asignación de recursos físicos, económicos, técnicos, humanos y ambientales está acorde con las actividades productivas a realizar.\",\n            \"El establecimiento de formas asociativas/alianzas productivas cumple con las normas legales y los intereses de la unidad productiva.\"\n          ]\n        },\n        {\n          \"numero\": 3,\n          \"descripcion\": \"Establecer el plan de monitoreo y seguimiento de los procesos productivos agrícolas de acuerdo con criterios técnicos del cultivo y normas ambientales y de seguridad y salud en el trabajo.\",\n          \"criterios_desempeno\": [\n            \"La identificación de puntos críticos de monitoreo y seguimiento corresponde con los ciclos productivos de la especie agrícola establecida.\",\n            \"La definición de acciones de monitoreo y seguimiento de los procesos productivos corresponde con los parámetros técnicos y las características de la especie cultivada.\",\n            \"La verificación de trámites legales de la producción y comercialización está acorde con los lineamientos y requisitos legales técnicos y ambientales de las entidades y entidades competentes.\",\n            \"La determinación de acciones de control de riesgos laborales está acorde con la normatividad de seguridad y salud en el trabajo.\",\n            \"La selección de buenas prácticas agrícolas y de manufactura y normativas de calidad de productos corresponde con las necesidades de la unidad productiva y las proyecciones del mercado\"\n          ]\n        }\n      ],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Plantear distintos tipos de producción agrícola en función de las condiciones agroclimáticas y características y tendencias del mercado.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Identifica las características del mercado teniendo en cuenta el sistema productivo agrícola.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Valora las condiciones edafoclimáticas según criterios técnicos y necesidades del cultivo.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Define el tipo de sistema productivo agrícola en correspondencia con las condiciones agroclimáticas y tipos de mercado.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Estima los recursos físicos, humanos y económicos en función del sistema productivo agrícola\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Determina la infraestructura física de la unidad productivas de acuerdo con las etapas del sistema productivo agrícola\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Estima la producción agrícola de acuerdo con las características de oferta y demanda del mercado.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Identifica fuentes de financiación de recursos económicos según la proyección de la producción agrícola\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Determinar las actividades agrícolas de acuerdo con el sistema productivo y las etapas fenológicas del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Dispone insumos en correspondencia con actividades agrícolas del sistema productivo\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Programa la maquinaria, herramienta y equipos en función de las actividades agrícolas del sistema productivo\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Clasifica áreas físicas en correspondencia con los requerimientos del proceso productivo agrícola\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Organiza las actividades técnicas del sistema productivo conforme con las competencias del talento humano.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Reconoce los tipos de organización comunitaria en función de sus tradiciones productivas agrícolas\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Diferencia los tipos de alianzas asociativas y/o comerciales teniendo en cuenta los tipos de organización comunitaria.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Definir mecanismos y herramientas de monitoreo y seguimiento de las actividades productivas según las características del sistema productivo agrícola.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Identifica las herramientas y técnicas de monitoreo y seguimiento en correspondencia con las actividades agrícolas del sistema productivo.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Distingue herramientas de seguimiento y evaluación según el sistema productivo agrícola.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Diferencia actividades de monitoreo y control teniendo en cuenta las actividades del proceso productivo.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Identifica la normativa técnica, ambiental, calidad según el proceso productivo agrícola\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Realiza los trámites legales Identificar los tipos de trámites legales en función de las normativas técnica, ambiental y de calidad.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Identifica los requerimientos normativos legales de seguridad y salud ocupacional según el proceso productivo agrícola\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Diferencia los riesgos de seguridad y salud ocupacional según las actividades y procesos productivos.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Selecciona procesos y procedimientos de monitoreo y seguimiento en correspondencia con el sistema productivo agrícola.\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Insumos agrícolas: concepto, tipos, formas o maneras de preparación, aplicación y almacenamiento.\",\n          \"Infraestructuras/áreas de producción: definición, tipos, características, condiciones\",\n          \"Maquinaria y equipos agrícolas: conceptos, tipos, uso, características, funcionamiento\",\n          \"Herramientas e instrumentos agrícolas: concepto, tipos, formas o maneras de uso, limpieza, almacenamiento.\",\n          \"Infraestructuras de multiplicación de material vegetal: concepto, tipos, condiciones, programación\",\n          \"Cultivo: concepto, tipos, características según especie productiva, requerimientos edafoclimáticos, requerimientos nutricionales y de manejo agronómico\",\n          \"Planeación agropecuaria básica: Fundamentos, técnicas, herramientas, aplicación y gestión\",\n          \"Negocios agrícolas: conceptos básicos, naturaleza, estructura, tipos, diseño de planes de negocios, Estrategias de comercialización-Las 4P (producto, precio, plaza/mercado, promoción)\",\n          \"Proyecto productivo agrícola: definición, metodologías de formulación, implementación y seguimiento\",\n          \"Herramientas de diagnóstico y análisis de proyectos y procesos productivos agrícolas: concepto, tipos, características y aplicación\",\n          \"Talento humano/equipo de trabajo: definición, características, estructura, roles y perfiles y conceptos asociados\",\n          \"Alianzas estratégicas/asociatividad: definición, características, tipos, requisitos, ventajas y desventajas, trámites normativos y legales.\",\n          \"Seguridad ambiental y ocupacional en actividades agrícolas: riesgos, alcances de sistemas de aseguramiento de calidad ambiental y ocupacional, procedimientos, requerimientos, implementación\",\n          \"Inventarios: concepto, tipos, aplicación, métodos de realización\",\n          \"Cadena de valor: definición, características, funciones, regulación\",\n          \"Servicio al cliente: concepto, orientaciones, captación, fidelización, retención.\",\n          \"Regulación: Normas, leyes, resoluciones de producción, transporte, distribución y comercialización de productos agrícolas.\",\n          \"Fuentes de financiación: concepto, trámites\",\n          \"Fuentes de información: definición, tipos, manejo, Tecnologías de información y comunicación-TICs, características, estrategias.\",\n          \"Sistemas de aseguramiento de calidad: tipos (Buenas Prácticas de Manufactura, Aseguramiento de puntos críticos de control HACCP, ISO, etc.), aplicación, procesos, producto no conforme, acciones preventivas, correctivas y de mejora, trámites y registros\",\n          \"Programación de la producción: cronogramas, responsables\",\n          \"Manuales, procesos y procedimientos productivos agrícolas: concepto, tipos, aplicación, elaboración, informes\",\n          \"Manuales, procesos y procedimientos de administración de unidades de producción agrícola: conceptos, tipos, aplicación, elaboración, informes.\",\n          \"Registros de actividades productivas y administrativas: concepto, tipos, diseño de formatos, aplicación, diligenciamiento y seguridad\",\n          \"Seguimiento de procesos y proyectos productivos agropecuarios: definición, aplicación y herramientas, acciones de mejora.\"\n        ],\n        \"procedimentales\": [\n          \"Aplicación de técnicas y herramientas de planeación de proyectos productivos agrícolas\",\n          \"Manejo de herramientas de diagnóstico en procesos productivos y administrativos del sector agrícola\",\n          \"Estimación y asignación de recursos físicos, humanos, económicos y ambientales.\"\n        ],\n        \"actitudinales\": [\n          \"Rigurosidad en la planeación del proceso productivo.\",\n          \"Disposición de reconocer las condiciones y contexto productivo a nivel local, regional y nacional.\",\n          \"Capacidad de respuesta para atender las demandas del mercado.\"\n        ],\n        \"fuente\": \"extraido\"\n      }\n    },\n    {\n      \"codigo\": \"UC2-3-AGRO-AGR-001\",\n      \"denominacion\": \"Orientar las actividades agrícolas de acuerdo con criterios técnicos.\",\n      \"es_transversal\": false,\n      \"duracion_horas\": 100,\n      \"elementos\": [\n        {\n          \"numero\": 1,\n          \"descripcion\": \"Organizar al equipo de trabajo en la ejecución de actividades productivas de acuerdo con el plan de producción.\",\n          \"criterios_desempeno\": [\n            \"La asignación de actividades agrícolas corresponde con los criterios técnicos del sistema productivo.\",\n            \"La delegación de responsabilidades está acorde con las competencias del equipo de trabajo.\",\n            \"La comunicación de instrucciones corresponde con lo establecido en el plan de producción agrícola.\"\n          ]\n        },\n        {\n          \"numero\": 2,\n          \"descripcion\": \"Promover acciones de actualización y capacitación al equipo trabajo de acuerdo con el plan de producción.\",\n          \"criterios_desempeno\": [\n            \"La programación de capacitaciones está acorde con las condiciones del sistema productivo agrícola y disponibilidad de recursos de la unidad productiva.\",\n            \"La transferencia de conocimientos a los trabajadores corresponde con las tecnologías aplicables al sistema productivo y las capacidades de la unidad productiva.\",\n            \"La identificación de las temáticas de capacitación está acorde con el nivel de competencias del equipo de trabajo y criterios técnicos del sistema productivo.\",\n            \"La atención a los requerimientos y necesidades técnicas, de salud y y de seguridad de los operarios y personal a cargo corresponde con los procedimientos definidos en la unidad productiva.\"\n          ]\n        },\n        {\n          \"numero\": 3,\n          \"descripcion\": \"Controlar la ejecución de procesos y recursos según criterios técnicos y lineamientos de la unidad productiva.\",\n          \"criterios_desempeno\": [\n            \"La verificación de actividades agrícolas corresponde con los lineamientos de Buenas Prácticas Agrícolas, de Manufactura y análisis de puntos críticos de control.\",\n            \"La toma de decisiones frente a imprevistos en el sistema productivo agrícola está acorde con la información obtenida del seguimiento de desempeño del equipo de trabajo y las observaciones de campo.\",\n            \"La ejecución de los recursos disponibles en la unidad productiva está acorde con el plan de producción.\",\n            \"El cumplimiento de las actividades asignadas al equipo de trabajo satisface las proyecciones de producción establecidas por la unidad productiva.\",\n            \"La revisión de las condiciones de seguridad ocupacional cumple con las condiciones de la unidad productiva.\",\n            \"La retroalimentación sobre acciones de control de riesgos laborales está acorde con la normatividad de seguridad y salud en el trabajo.\",\n            \"El cumplimiento de las actividades asignadas al equipo de trabajo satisface las proyecciones de producción establecidas por la unidad productiva agrícola.\"\n          ]\n        }\n      ],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Coordinar el equipo de trabajo en función de las actividades productivas y características del sistema productivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Reconoce las características del equipo de trabajo en función de las actividades y procesos productivos.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Distribuye las tareas en función de las capacidades y disponibilidad del personal.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Identifica aspectos de mejora en el desarrollo del proceso productivo agrícola en función de los resultados.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Facilita el trabajo en equipo según la naturaleza de las actividades productivas a realizar y la disponibilidad de personal.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Fomentar la capacitación personal y del equipo de trabajo en función del mejoramiento de las prácticas en el sistema productivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Identifica las necesidades de entrenamiento y actualización personal y del equipo de trabajo teniendo los intereses individuales y las características del sistema productivo.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Selecciona temáticas y ofertas de capacitación en correspondencia con su aplicación en el sistema productivo y condiciones de la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Participa individualmente o con su equipo de trabajo en actividades de formación en función de las ofertas de capacitación.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Aplica los conocimientos adquiridos en función de mejorar la producción agrícola.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Ejecutar acciones de control y seguimiento de las actividades del sistema productivo según lineamientos de la unidad productiva y parámetros técnicos del sistema productivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Diferencia técnicas y herramientas de seguimiento y control de acuerdo con las características de aplicación en el sistema productivo y normativas técnicas utilizadas en la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Maneja las herramientas de seguimiento y evaluación según los lineamientos de Buenas Prácticas Agrícolas, de Manufactura y de la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Realiza seguimiento periódico de las actividades realizadas teniendo en cuenta el plan de producción y los lineamientos de la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Verifica la ejecución de los procesos en correspondencia con el plan de producción.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Comunica a su par o su superior los hallazgos y fallas identificadas durante el seguimiento y evaluación conforme a los procedimientos definidos.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Realiza análisis de las causas de los hallazgos y fallas en función de corregirlos y/o evitar nuevas ocurrencias.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Verifica la ejecución de los recursos físicos, humanos y económicos en función de los recursos asignados.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Verifica el cumplimiento de las recomendaciones y órdenes de los pares o jefes inmediatos en función mejorar las actividades del sistema productivo.\"\n            },\n            {\n              \"codigo\": \"CE9\",\n              \"descripcion\": \"Registra y documenta las actividades de seguimiento en función de mantener la trazabilidad de la información.\"\n            },\n            {\n              \"codigo\": \"CE9\",\n              \"descripcion\": \"Verifica el cumplimiento de lineamientos y recomendaciones en el uso de implementos de protección y seguridad en función de reducir riesgos y peligros.\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Monitoreo y seguimiento de procesos y actividades productivas agrícolas: Conceptos, alcance y propósitos, tipos, métodos y herramientas de monitoreo y seguimiento, procedimientos (tiempos y frecuencias, responsables), identificación de indicadores, variables y condiciones (eficacia, eficiencia, sostenibilidad, impacto, etc.), elaboración de informes\",\n          \"Ciclo Planear, Hacer, Verificar, Actuar-PHVA: Alcance, aplicación en las actividades productivas y administrativas agrícolas, procesos y procedimientos\",\n          \"Talento humano/equipo de trabajo: Definición, características, estructura, roles y perfiles y conceptos asociados, seguridad ambiental y ocupacional, identificación de necesidades de formación, procesos y planes de formación.\",\n          \"Habilidades blandas: Definición, tipos, planes de fortalecimiento de habilidades blandas (trabajo en equipo, comunicación asertiva, resolución de conflictos, toma de decisiones)\",\n          \"Sistemas de gestión de seguridad industrial y ocupacional: Conceptos, alcances, requisitos, procedimientos, normativas aplicables a la actividad agrícola productiva, elementos de seguridad industrial y ocupacional, dotaciones.\",\n          \"Sistemas de gestión de calidad: Tipos, aplicación, procedimientos, con énfasis en las acciones preventivas y correctivas (definición, aplicación, procedimientos, documentación, registros, tratamientos) y Producto no conforme (definición, procedimientos, identificación, tratamiento, documentación).\",\n          \"Registros y formatos de seguimiento y evaluación: Importancia, tipos, características, diligenciamiento y seguridad\",\n          \"Reporte de seguimiento y evaluación: Concepto, tipos, formatos.\"\n        ],\n        \"procedimentales\": [\n          \"Utilización de herramientas de monitoreo y seguimiento\",\n          \"Identificación y gestión de riesgos y los peligros en las áreas de producción\",\n          \"Utilización de elementos de seguridad y salud en el trabajo\",\n          \"Manejo de instrumentos para el registro de indicadores técnicos e inventarios\"\n        ],\n        \"actitudinales\": [\n          \"Liderazgo en el manejo de personas a su cargo.\",\n          \"Equidad en la asignación de tareas según las capacidades y disponibilidad de personal.\",\n          \"Comunicación asertiva\",\n          \"Disposición a resolver conflictos\",\n          \"Capacidad de análisis frente a las necesidades del recurso humano para el desarrollo del proceso productivo\",\n          \"Disposición a promover y realizar el trabajo en equipo en el desarrollo de actividades y procesos productivos agrícolas.\",\n          \"Cumplimiento de los procedimientos y lineamientos del jefe inmediato según sea el caso\",\n          \"Toma de decisiones y aplicación de correctivos en el proceso productivo\"\n        ],\n        \"fuente\": \"extraido\"\n      }\n    },\n    {\n      \"codigo\": \"UC3-3-AGRO-AGR-001\",\n      \"denominacion\": \"Ejecutar actividades de establecimiento, mantenimiento y cosecha conforme a las características del sistema productivo.\",\n      \"es_transversal\": false,\n      \"duracion_horas\": 200,\n      \"elementos\": [\n        {\n          \"numero\": 1,\n          \"descripcion\": \"Realizar actividades de manejo del suelo y agua según las recomendaciones del plan de fertilización y abonado.\",\n          \"criterios_desempeno\": [\n            \"La toma de muestras de suelos está acorde con las recomendaciones técnicas y características del terreno.\",\n            \"La programación de la fertilización de suelos está acorde con los resultados del análisis de suelos y las recomendaciones técnicas.\",\n            \"La preparación del terreno cumple con el programa de producción y las técnicas de cultivo y siembra.\",\n            \"El montaje del sistema de riego cumple con los requerimientos técnicos del sistema productivo.\"\n          ]\n        },\n        {\n          \"numero\": 2,\n          \"descripcion\": \"Manejar insumos, materiales y herramientas de acuerdo con las necesidades de las actividades productivas a realizar.\",\n          \"criterios_desempeno\": [\n            \"La preparación de agroinsumos está acorde con las necesidades fisiológicas del cultivo y las recomendaciones del profesional a cargo.\",\n            \"La preparación de bioinsumos corresponde con la disponibilidad de recursos en la unidad productiva agrícola.\",\n            \"La aplicación de agroinsumos cumple con las necesidades fisiológicas del cultivo y la normativa de seguridad ambiental y salud en el trabajo.\",\n            \"La documentación del uso de los insumos y materiales cumple con los lineamientos de la unidad productiva.\",\n            \"La disposición final de empaques y envases de insumos agrícolas cumple con las normas de seguridad ambiental.\",\n            \"El almacenamiento y conservación de productos de uso agrícola corresponde con los procedimientos definidos por la unidad productiva.\",\n            \"La selección de materiales y herramientas de preparación y aplicación de agroinsumos corresponde con la tipología de formulación.\"\n          ]\n        },\n        {\n          \"numero\": 3,\n          \"descripcion\": \"Realizar la siembra de especies vegetales siguiendo procedimientos e indicaciones técnicas.\",\n          \"criterios_desempeno\": [\n            \"La siembra y resiembra de material vegetal está acorde con la densidad y las recomendaciones técnicas del cultivo\",\n            \"La aplicación de agua y agroinsumos indicados en la siembra está acorde con el estado fisiológico del cultivo y la oferta ambiental.\",\n            \"La mManipulación de las herramientas e instrumentos de siembra está acorde con los manuales técnicos y características del cultivo.\",\n            \"El diligenciamiento de los registros de establecimiento corresponde con los procedimientos definidos en la organización o unidad productiva.\"\n          ]\n        },\n        {\n          \"numero\": 4,\n          \"descripcion\": \"Mantener el cultivo teniendo en cuenta técnicas de manejo integrado y labores culturales aplicables al tipo de especie.\",\n          \"criterios_desempeno\": [\n            \"El manejo integrado de arvenses cumple con las recomendaciones técnicas de control fitosanitario.\",\n            \"El control manejo integrado de plagas y enfermedades está acorde con las características del cultivo y el grado de afectación.\",\n            \"La protección del cultivo está acorde con la implementación de tecnologías limpias.\",\n            \"La programación de la fertilización foliar corresponde con las demandas nutricionales del cultivo y con recomendaciones técnicas de profesionales y técnicos.\",\n            \"El manejo del cultivo está acorde con los principios de producción agroecológicaBuenas Prácticas Agrícolas y los lineamientos de la unidad productiva.\"\n          ]\n        },\n        {\n          \"numero\": 5,\n          \"descripcion\": \"Cosechar productos agrícolas según las características fisiológicas del cultivo y los requerimientos del mercado.\",\n          \"criterios_desempeno\": [\n            \"La comprobación de las condiciones de maduración del producto cumple con las características técnicas y la normatividad de calidad de producto.\",\n            \"La recolección del producto cumple con características de madurez del producto y las recomendaciones técnicas.\",\n            \"El uso de instrumentos y equipos de cosecha cumple con las características morfológicas del producto y recomendaciones técnicas.\",\n            \"La verificación de las características de calidad del producto cosechado cumple con las normas técnicas de calidad y características del mercado.\",\n            \"El inventario de productos cosechados corresponde con los procedimientos definidos en la unidad productiva.\"\n          ]\n        }\n      ],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Implementar planes de fertilización en función de los análisis de suelos y los requerimientos nutricionales del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Diferencia técnica de muestreo de suelos según las características morfológicas del terreno.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Selecciona técnicas de muestreo de suelos según recomendaciones y procedimientos técnicos.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Identifica las características físicas del suelo y/o sustratos en función de los requerimientos del cultivo.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Contrasta los resultados del análisis de suelos en función de los requerimientos nutricionales del sistema productivo agrícola.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Estima los requerimientos de insumos de nutrición vegetal a parir de las características fisicoquímicas del suelo.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Reconoce las características del plan de fertilización teniendo en cuenta los requerimientos nutricionales de la especie cultivada.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Elabora planes de fertilización teniendo en cuenta las necesidades nutricionales del cultivo y las capacidades de la unidad productiva.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Aplicar técnicas de manejo de suelo y aguas teniendo en cuenta las condiciones agroclimáticas y las características agronómicas del sistema productivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Reconoce los requerimientos hídricos del cultivo de acuerdo con recomendaciones técnicas y la experiencia práctica.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Selecciona sistemas de riego en función de las necesidades del cultivo y la topografía de terreno.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Maneja con precisión el sistema de riego teniendo en cuenta sus características de diseño.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Identifica técnicas de preparación de suelos en función de las características del suelo.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Prepara el suelo en correspondencia con prácticas sostenibles de manejo.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Alistar agroinsumos conforme a los requerimientos del proceso productivo, recomendaciones y fichas técnicas de los productos.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Reconoce las necesidades fisiológicas del cultivo según la sintomatología y expresión en campo.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Diferencia las características de los insumos teniendo en cuenta su composición (ingrediente activo)\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Calcula cantidades de insumos conforme a la formulación y ficha técnica de los productos.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Utiliza de manera precisa los insumos de acuerdo con las necesidades fisiológicas del cultivo\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Reconoce los riesgos e impactos ambientales del uso indiscriminado de insumos conforme a la composición relacionada en la etiqueta.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Realiza prácticas de lavado y deshecho de envases según la hoja de seguridad del producto.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Explica el propósito de las fichas de seguridad de los agroinsumos según los procedimientos de almacenamiento de la unidad productiva.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA4\",\n          \"descripcion\": \"Aplicar técnicas de siembra de material vegetal en función del sistema productivo y las condiciones agroecológicas de la zona.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Reconoce técnicas siembra en función de las características del material vegetal.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Trasplanta y resiembra material vegetal según condiciones agroecológicas y características de la especie.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Dispone en campo el material vegetal en función del trazado del cultivo y/o asocio de cultivos.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Reconoce las herramientas e instrumentos de siembra según las técnicas de siembra.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA5\",\n          \"descripcion\": \"Aplicar técnicas de manejo integrado del cultivo teniendo en cuenta las características agronómicas del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Identifica actividades de monitoreo y control del sistema productivo en función de las etapas fisiológicas y las condiciones agroclimáticas.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Reconoce los ciclos de desarrollo de las plagas, enfermedades y arvenses teniendo en cuenta los riesgos de afección y daño al sistema productivo.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Determina umbrales de control de plagas y enfermedades según el porcentaje de presencia y daños en el sistema productivo.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Reconoce medidas de control y manejo de plagas y enfermedades en función de los umbrales y daños en las plantas.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Diferencia la sintomatología de las plantas en función de los requerimientos nutricionales.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Utiliza los agroinsumos teniendo en cuenta la efectividad del ingrediente activo el control y/o nutrición de plantas.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Realiza rotación de agroinsumos en función del ingrediente activo y a recomendaciones técnicas.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Usa elementos de protección personal agrícola de acuerdo con recomendaciones técnicas.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA6\",\n          \"descripcion\": \"Recolectar los productos agrícolas de acuerdo con el estado de madurez de la planta y/o de los frutos.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Reconoce las características de madurez del fruto y/o partes de la planta según la especie productiva y las normas de calidad\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Diferencia las características de calidad de los productos cosechados en función de las condiciones de mercado\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Demuestra el uso de técnicas y herramientas de cosecha de acuerdo con la tipología y las características de los productos agrícolas.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Discrimina las características y tipos de empaques de acuerdo con las características del producto cosechado.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Diferencia los procedimientos de manipulación de los productos cosechados de acuerdo con las características de calidad y NTC.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Manipula los productos cosechados de acuerdo con las recomendaciones técnicas y NTC.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Inspecciona los productos cosechados teniendo en cuenta los tipos de contaminantes físicos y sanitarios que pueden afectar su calidad.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Reconoce los riesgos y tipos de contaminantes de los productos cosechados de acuerdo con las recomendaciones técnicas y características de calidad.\"\n            },\n            {\n              \"codigo\": \"CE9\",\n              \"descripcion\": \"Descarta los contaminantes y productos en mal estado siguiendo los procedimientos y recomendaciones técnicas.\"\n            },\n            {\n              \"codigo\": \"CE10\",\n              \"descripcion\": \"Efectúa análisis de control de calidad en la etapa de cosecha según procedimientos técnicos/NTC y características de los productos agrícolas.\"\n            },\n            {\n              \"codigo\": \"CE11\",\n              \"descripcion\": \"Realiza inventarios según las herramientas y procedimientos definidos en la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE12\",\n              \"descripcion\": \"Utiliza los elementos de protección personal según reglamento de salud ocupacional y seguridad industrial.\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Suelo: concepto, características, tipos, fertilización, muestreo, análisis e interpretación de resultados, diseño de planes de fertilización, actividades de preparación de suelos, mantenimiento de sus características\",\n          \"Sustratos: concepto, importancia, uso en áreas de producción de material vegetal, tipos, preparación y manejo\",\n          \"Riego: concepto, fuentes, métodos, diseño y operación de sistemas de riego, mantenimiento\",\n          \"Áreas de producción: definición, tipos (semillero/almácigo, en hoyos, al voleo, precisión, filas/eras, camellón, etc.), características, condiciones, señalización y diferenciación, mantenimiento, limpieza y desinfección\",\n          \"Insumos y recursos: conceptos, tipos, características, fichas técnicas, hojas de seguridad, cálculos de dosis y técnicas de aplicación, almacenamiento, manejo de emergencias por derrames y manejo de residuos\",\n          \"Material vegetal: conceptos, tipos, características de calidad, técnicas de selección y multiplicación, manipulación y transporte, técnicas de conservación y almacenamiento, novedades presentadas en el proceso\",\n          \"Producción de productos agrícolas: concepto, tipos, manipulación, métodos de producción, procedimientos y manejo, novedades presentadas en el proceso\",\n          \"Siembra: definición, tipos, densidades y recomendaciones según especie y características del suelo\",\n          \"Cultivo: concepto, tipos, características según especie productiva, requerimientos edafoclimáticos, etapas fisiológicas, establecimiento, manejo y mantenimiento\",\n          \"Plagas, enfermedades y arvenses: tipos, biología, monitoreo, umbrales de afección, manejo y control, reporte\",\n          \"Manejo integrado del cultivo: concepto, tipos de manejo (físico, mecánico, químico, biológico, entre otros) monitoreo de enfermedades, plagas y arvenses, biología de las principales plagas, enfermedades y arvenses que afectan a los cultivos\",\n          \"Prácticas culturales: concepto, alcance, tipos (manejo del recurso hídrico o riego, poda, nutrición vegetal o fertilización, ahoyado, trazado, siembra, resiembra, aporque, blanqueado, tutorado, raleo, entre otros).\",\n          \"Cosecha: concepto, tipos de productos (climatéricos y no climatéricos), técnicas de cosecha, punto de madurez fisiológica, de cosecha y comercial, manipulación de productos cosechados, estándares de calidad, clasificación de productos en campo, herramientas y equipos para la cosecha, almacenamiento\",\n          \"Calidad e inocuidad: concepto, características de calidad, tratamientos de calidad, normativas vigentes, estándares de acuerdo con el mercado objetivo, documentación y registro\",\n          \"Sistemas de aseguramiento de calidad: concepto, tipos, aplicación, Buenas Prácticas Agrícolas, Aseguramiento de puntos críticos de control HACCP, etc., procesos, producto no conforme, acciones preventivas, correctivas y de mejora, trámites y registros trámites y registro\",\n          \"Registros y formatos de procesos de producción agrícola: importancia, tipos, características, diligenciamiento y seguridad\",\n          \"Correctivos en la producción: conceptos, procedimientos, características, disposición y manejo de material vegetal y productos agrícolas\"\n        ],\n        \"procedimentales\": [\n          \"Manejo de fertilizantes y agroquímicos\",\n          \"Uso y mantenimiento de sistemas de riego\",\n          \"Selección de técnicas de producción de material vegetal\",\n          \"Realización de prácticas culturales\",\n          \"Uso de equipos durante las etapas de establecimiento, mantenimiento y cosecha de productos agrícolas\",\n          \"Preparación, rotación y aplicación de insumos agrícolas\",\n          \"Cosecha y acondicionamiento de productos agrícolas\",\n          \"Disposición de residuos durante las etapas de establecimiento, mantenimiento y cosecha de cultivos\",\n          \"Uso de elementos de protección personal en los procesos de producción y cosecha de productos agrícolas\"\n        ],\n        \"actitudinales\": [\n          \"Resolución de problemas en el desarrollo del proceso productivo.\",\n          \"Conciencia sobre la importancia de conservar el medio ambiente y los recursos.\",\n          \"Actitud crítica frente a las deficiencias de los procesos para proponer soluciones y/o acciones de mejora\",\n          \"Actitud innovadora en el manejo de los cultivos, en la resolución de contingencias e implementación de tecnologías.\",\n          \"Actitud conciliadora y propositiva en la identificación de fallas que se presentan en el proceso productivo.\",\n          \"Conciencia frente a la importancia de mantener la calidad e inocuidad de los productos agrícolas.\",\n          \"Respeto en el manejo de los procesos agrícolas y sus etapas.\"\n        ],\n        \"fuente\": \"extraido\"\n      }\n    },\n    {\n      \"codigo\": \"UC4-3-AGRO-AGR-001\",\n      \"denominacion\": \"Acondicionar productos agrícolas a nivel rural de acuerdo con las capacidades y oportunidades de la unidad productiva y las necesidades del mercado\",\n      \"es_transversal\": false,\n      \"duracion_horas\": 110,\n      \"elementos\": [\n        {\n          \"numero\": 1,\n          \"descripcion\": \"Realizar actividades de poscosecha de productos agrícolas de acuerdo con procedimientos técnicos y demandas del mercado.\",\n          \"criterios_desempeno\": [\n            \"La agregación de valor a los productos agrícolas cumple con las demandas y oportunidades de mercado.\",\n            \"El acondicionamiento de productos agrícolas corresponde con las capacidades de la unidad productiva y normativas legales.\",\n            \"La selección de productos agrícolas cosechados cumple con las características técnicas exigidas por el mercado.\",\n            \"El almacenamiento de los productos cumple con las normas de calidad y las recomendaciones técnicas.\"\n          ]\n        },\n        {\n          \"numero\": 2,\n          \"descripcion\": \"Verificar la calidad del producto de acuerdo con las normativas vigentes y las demandas del mercado.\",\n          \"criterios_desempeno\": [\n            \"El análisis físico y organoléptico está acorde con rangos de aceptación de la calidad y condiciones del mercado.\",\n            \"La clasificación de productos agrícolas está acorde con los resultados de los análisis de calidad y/o las recomendaciones del profesional.\",\n            \"La documentación en la etapa de poscosecha cumple con los lineamientos de la unidad productiva y manuales técnicos.\"\n          ]\n        },\n        {\n          \"numero\": 3,\n          \"descripcion\": \"Organizar la distribución y venta de productos agrícolas de acuerdo con el plan de comercialización.\",\n          \"criterios_desempeno\": [\n            \"La disposición de los productos en el centro de acopio o planta de transformación cumple con las características de almacenamiento\",\n            \"La programación de la logística de transporte corresponde con el plan de comercialización\",\n            \"La estimación de variables de venta y comercialización de los productos está acorde con los costos de producción y precios comerciales.\",\n            \"El conteo de productos agrícolas está acorde con técnicas y herramientas de manejo de inventarios.\",\n            \"La fijación de precios corresponde con los costos de producción y referencias del mercado.\"\n          ]\n        }\n      ],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Aplicar procesos operativos estandarizados de acondicionamiento/poscosecha de productos agrícolas conforme a las demandas del mercado y capacidades de la unidad productiva.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Determina la viabilidad de agregar valor a los productos cosechados en función de las capacidades de la unidad productiva y demandas del mercado.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Reconoce técnicas y tecnologías de acondicionamiento/poscosecha de producto en función de la agregación de valor y demandas del mercado.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Estandariza procesos operativos de acondicionamiento/poscosecha en función de la calidad del producto terminado.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Determina características de calidad de productos con valor agregado según las demandas del mercado y sistemas de gestión de calidad aplicables.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Define tiempos y riesgos en la obtención de productos con agregación de valor en correspondencia con las técnicas y tecnologías de acondicionamiento.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Calcula las materias primas a utilizar en el desarrollo de los productos según las cantidades definidas en los POE.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Revisa las materias primas a utilizar en el acondicionamiento/poscosecha según características de calidad.\"\n            },\n            {\n              \"codigo\": \"CE9\",\n              \"descripcion\": \"Elabora productos con valor agregado teniendo en cuenta los POE y las características de calidad definidas según tipología/presentación del producto.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Revisar la calidad del producto acondicionado según características de calidad y requerimientos del mercado.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Reconoce las características de calidad del producto de acuerdo con los procedimientos técnicos y POE.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Reconoce técnicas de muestreo de producto según el tipo de análisis a realizar.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Realiza análisis de calidad de productos acondicionados según POE, NTC y Buenas Prácticas de Manufactura.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Define procedimientos de clasificación y destino final de productos terminados en función del cumplimiento de requisitos de calidad\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Determina criterios y procedimientos de producto conforme y no conforme según cumplimiento/incumplimiento de características de calidad y normativas aplicables.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Realiza la clasificación de producto según lo estipulado en el procedimiento de producto conforme.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Diferencia, separa y desecha el producto no conforme según lo estipulado en el procedimiento.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Utiliza empaques parciales o finales del producto en la etapa de almacenamiento en correspondencia con la naturaleza del producto y etapas subsiguientes: distribución/comercialización.\"\n            },\n            {\n              \"codigo\": \"CE9\",\n              \"descripcion\": \"Realiza inventarios según procedimientos definidos en la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE11\",\n              \"descripcion\": \"Diligencia formatos físicos o digitales según los procedimientos definidos en la unidad productiva.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Definir estrategias de venta y comercialización de productos de acuerdo con características diferenciales de calidad.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Revisa las dinámicas de oferta y demanda del producto en función de fijación de precios.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Calcula los costos de producción vs el costo de venta en función de fijación de precios de los productos y con respecto al análisis de oferta/demanda.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Establece condiciones de negociación en correspondencia con las características de calidad del producto, los volúmenes de producción y los precios.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Reconoce los trámites técnicos y ambientales para la comercialización de acuerdo con la naturaleza del proceso productivo agrícola\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Establece un plan de comercialización en función de las demandas del mercado, capacidades y programaciones de la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Determina tipos de transporte según costos y condiciones de mantenimiento de las características de calidad del producto.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Selecciona canales de distribución en función de la retribución y porcentaje de ganancia.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Verifica las condiciones de transporte y distribución en correspondencia con las características y buenas prácticas de manipulación del producto.\"\n            },\n            {\n              \"codigo\": \"CE9\",\n              \"descripcion\": \"Implementa estrategias de fijación de clientes y servicios posventa en función de garantizar la demanda de productos agrícolas y/o sus derivados.\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Poscosecha: Concepto, técnicas de acondicionamiento de productos agrícolas, manipulación de productos agrícolas, características de calidad, almacenamiento\",\n          \"Transformación rural: Concepto, alternativas de transformación, estándares de calidad, buenas prácticas de manufactura (BPM)\",\n          \"Acondicionamiento de productos agrícolas: Concepto, tipos según especie productiva (limpieza, selección, clasificación, lavado, secado, trilla, encerado, desmucilaginado, empaque, etiquetado), procedimientos operativos estandarizados POE\",\n          \"Almacenamiento: Concepto, tipos de almacenamiento (natural, en campo, ventilación natural, ventilación forzada, refrigeración, sistemas combinados, atmósferas controladas) según especie productiva\",\n          \"Normas Técnicas Colombianas (NTC): Alcance, aplicación.\",\n          \"Maquinaria y equipos agrícolas de poscosecha y transformación rural: Conceptos, tipos, uso, características, funcionamiento\",\n          \"Herramientas e instrumentos de poscosecha y transformación rural: Concepto, tipos, formas o maneras de uso, limpieza, almacenamiento.\",\n          \"Calidad e inocuidad: Concepto, características de calidad, tratamientos y procedimientos de calidad (incluye producto no conforme), normativas vigentes, estándares de acuerdo con el mercado objetivo, documentación y registro\",\n          \"Sistemas de aseguramiento de calidad: Tipos (Buenas Prácticas de Manufactura, Aseguramiento de puntos críticos de control HACCP, etc.), aplicación, procesos, producto no conforme, acciones preventivas, correctivas y de mejora, trámites y registros\",\n          \"Programación de la producción: cronogramas, responsables\",\n          \"Manejo de inventarios: Tipos, aplicación\",\n          \"Comercialización: Conceptos básicos, naturaleza, estructura, tipos, diseño de planes de negocios, estrategias de comercialización-Las 4P (producto, precio, plaza/mercado, promoción), fidelización de clientes\",\n          \"Información contable y financiera: Conceptos básicos, tipos, aplicación, elaboración de libros contables e informes\",\n          \"Transporte: concepto, tipos, tecnologías aplicables (cadena de frío)\",\n          \"Regulación: Normas, leyes, resoluciones, aplicación.\",\n          \"Fuentes de información: Definición, tipos, manejo, Tecnologías de información y comunicación-TICs, características, estrategias.\"\n        ],\n        \"procedimentales\": [\n          \"Manipulación de productos agrícolas\",\n          \"Acondicionamiento de productos agrícolas\",\n          \"Manejo de equipos de acondicionamiento y transformación rural\",\n          \"Identificación y aplicación de normativas técnicas vigentes\",\n          \"Tratamiento de producto no conforme\",\n          \"Manejo de inventarios de productos en almacenamiento y/o comercializados.\",\n          \"Implementación de las 4 P (plaza, promoción, producto y precio)\",\n          \"Transporte y distribución de productos agrícolas\",\n          \"Reconocimiento de elementos de monitoreo y seguimiento que influyen en el desarrollo del proceso productivo y en la satisfacción del consumidor/cliente\"\n        ],\n        \"actitudinales\": [\n          \"Mantenimiento de la calidad e inocuidad del producto durante las etapas de producción, transformación y almacenamiento de los productos\",\n          \"Exploración del entorno comercial para la toma de decisiones\",\n          \"Rigurosidad en la ejecución de los planes y programas de producción definidos.\",\n          \"Resolución de problemas y toma decisiones acertadas y oportunas en el proceso productivo.\",\n          \"Evaluación de opciones técnicas o tecnológicas para optimizar recursos y procesos.\",\n          \"Valoración y análisis de la información que se registra en pro de la toma de decisiones.\",\n          \"Conciencia en el cumplimiento de los requisitos de calidad del producto en función del consumidor/cliente\",\n          \"Análisis del riesgo de contaminación de productos y salud del consumidor/cliente.\",\n          \"Apreciación de la importancia de mantener clientes y de mercados.\",\n          \"Conciencia en la realización de actividades que generen menor impacto ambiental.\"\n        ],\n        \"fuente\": \"extraido\"\n      }\n    },\n    {\n      \"codigo\": \"UC5-3-AGRO-AGR-001\",\n      \"denominacion\": \"Mantener y manipular la infraestructura y equipos agrícolas de acuerdo con los requisitos técnicos del sistema productivo.\",\n      \"es_transversal\": false,\n      \"duracion_horas\": 80,\n      \"elementos\": [\n        {\n          \"numero\": 1,\n          \"descripcion\": \"Preservar las condiciones de la maquinaria y equipos agrícolas de acuerdo con las características de la unidad productiva y los documentos técnicos.\",\n          \"criterios_desempeno\": [\n            \"La organización de los programas de mantenimiento y calibración de maquinaria y equipos cumple con los requerimientos técnicos y necesidades de las actividades productivas.\",\n            \"El mantenimiento preventivo de maquinaria y equipos a nivel de finca cumple con manuales técnicos.\",\n            \"Las reparaciones menores de maquinarias y equipos agrícolas cumplen con las recomendaciones de los manuales del fabricante y las indicaciones del superior a cargo.\",\n            \"El almacenamiento de la maquinaria y equipos cumple con las especificaciones y manuales técnicos del fabricante.\",\n            \"La documentación del mantenimiento y control de la maquinaria y equipos cumple con los lineamientos de la unidad productiva y manuales técnicos.\"\n          ]\n        },\n        {\n          \"numero\": 2,\n          \"descripcion\": \"Maniobrar la maquinaria y equipos de acuerdo con las especificaciones técnicas y las necesidades del cultivo.\",\n          \"criterios_desempeno\": [\n            \"La preparación de maquinaria y equipos agrícolas está acorde con las actividades a realizar.\",\n            \"El uso de la maquinaria y equipos agrícolas está acorde con los manuales del fabricante y actividades a realizar.\",\n            \"La operación de maquinaria y equipos de tracción mecánica cumple con la actividad objeto de fabricación y las normas de seguridad y salud en el trabajo.\",\n            \"La documentación del uso de la maquinaria y equipos cumple con los lineamientos de la unidad productiva y manuales técnicos.\"\n          ]\n        },\n        {\n          \"numero\": 3,\n          \"descripcion\": \"Mantener las infraestructuras productivas de acuerdo con las especificaciones técnicas y normativas vigentes.\",\n          \"criterios_desempeno\": [\n            \"La verificación del estado de las infraestructuras está acorde con los procedimientos técnicos de la unidad productiva.\",\n            \"La desinfección del área de trabajo cumple con el protocolo de higiene y desinfección de la unidad productiva.\",\n            \"La documentación de las actividades de uso y mantenimiento de las áreas de producción cumple con los lineamientos de la unidad productiva y manuales técnicos.\"\n          ]\n        }\n      ],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Ejecutar programas de mantenimiento y calibración de maquinaria y equipos agrícolas en función de las actividades productivas a realizar y características de la unidad productiva.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Diferencia los conceptos de mantenimiento y calibración de maquinaria y equipos en función de su aplicación.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Diferencia al alcance del mantenimiento preventivo y correctivo en función conservar su estado.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Utiliza manuales, instructivos, fichas técnicas de maquinaria y equipos en función de la programación del mantenimiento y calibración.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Efectúa los programas de mantenimiento preventivo y correctivo de acuerdo con la disponibilidad de recursos financieros.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Ajusta y repara en condiciones de finca la maquinaria y equipo teniendo en cuenta manuales y fichas técnicas del fabricante.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Destina áreas para el almacenamiento de maquinaria y equipos de acuerdo con las capacidades de la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Explica los riesgos de daño y/o deterioro de la maquinaria y equipos de acuerdo con las características técnicas y manuales de operación.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Operar la maquinaria y equipos de acuerdo con los manuales técnicos del fabricante y necesidades del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Diferencia los usos de la maquinaria y equipos según las actividades del proceso productivo.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Alista la maquinaria y equipos según la necesidad de utilización en las actividades del proceso productivo.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Calibra los equipos y maquinaria antes y después de su uso según las actividades a realizar.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Afora y carga la maquinaria y equipos agrícolas según las actividades a realizar y recomendaciones técnicas.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Utiliza accesorios de la maquinaria y equipos según la especificidad de actividades a realizar y naturaleza de los cultivos/procesos productivos.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Realiza limpieza y desinfección de la maquinaria y equipo antes y después de su uso en correspondencia con las actividades para la que fueron utilizadas.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Registra el uso y reporta fallas o daños durante la operación de maquinaria y equipos agrícolas de acuerdo con los procedimientos técnicos.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Usa implementos de protección personal durante la operación de maquinaria y equipos de acuerdo con los procedimientos de seguridad y salud en el trabajo.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Conservar y utilizar las infraestructuras productivas en función de la destinación en el proceso productivo agrícola.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE1\",\n              \"descripcion\": \"Adecúa y señaliza las áreas de producción teniendo en cuenta los SGC y normativas aplicables.\"\n            },\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Usa las áreas de acuerdo con la designación y utilidad en el proceso productivo.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Determina y aplica procedimientos de limpieza y desinfección de áreas en función de mantener la asepsia y calidad en las actividades productivas.\"\n            },\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Determina procedimientos de asepsia de los operarios antes y después del ingreso a las áreas productivas según sistemas de gestión de calidad y normativas vigentes.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Reconoce los tipos de sustancias de higienización y su aplicación según su acción en los programas de limpieza y desinfección.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Realiza rotación de productos en los procesos de limpieza y desinfección en función de mantener las condiciones de asepsia de las áreas.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Realiza reparaciones menores de mantenimiento de infraestructuras productivas según las capacidades y recursos de la unidad productiva.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Utiliza elementos de protección personal durante la reparación, limpieza y mantenimiento de infraestructuras de acuerdo con normativa de seguridad y salud en el trabajo.\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Maquinaria y equipos agrícolas: conceptos, tipos, uso, características, funcionamiento\",\n          \"Herramientas e instrumentos agrícolas: Concepto, tipos, formas o maneras de uso, limpieza, almacenamiento.\",\n          \"Mantenimiento y calibración de maquinaria y equipos: conceptos, tipos y técnicas, mantenimiento periódico, preventivo, mantenimiento correctivo, registros\",\n          \"Limpieza y desinfección de maquinaria, herramientas, instrumentos y equipos: Procedimientos, registros\",\n          \"Almacenamiento de equipos: Condiciones, procedimientos y uso de registros\",\n          \"Áreas de producción: Definición, tipos (viveros, invernaderos, bodegas, campos, etc.), características, condiciones, señalización y diferenciación\",\n          \"Mantenimiento de áreas: Tipos, procedimientos de mantenimientos menores, registro de mantenimiento\",\n          \"Limpieza y desinfección de áreas: Concepto, tipos de insumos de limpieza y desinfección, procedimientos, métodos de preparación de soluciones higienizantes y desinfección\",\n          \"Registros y formatos de uso, mantenimiento, calibración y reparación de equipos: importancia, tipos, características, diligenciamiento y seguridad de la información\",\n          \"Señalización y diferenciación de áreas de producción agrícola: Condiciones y normativas aplicables (BPA, HCCP, ISO, BPM)\",\n          \"Seguridad en el trabajo: concepto, elementos de protección personal, prevención de riesgos, normas de seguridad.\"\n        ],\n        \"procedimentales\": [\n          \"Uso y operación de maquinaria y equipos agrícolas\",\n          \"Aplicación de procesos de mantenimiento periódico, preventivo y correctivo de maquinaria y equipos\",\n          \"Limpieza y desinfección de herramientas, implementos, maquinaria y equipos\",\n          \"Mantenimiento de áreas de producción (lotes, viveros, invernaderos, bodegas, etc.)\",\n          \"Limpieza y desinfección de áreas de producción\",\n          \"Uso de elementos de protección personal según reglamento de salud ocupacional y seguridad industrial.\"\n        ],\n        \"actitudinales\": [\n          \"Rigurosidad en la ejecución de programas de mantenimiento preventivo y correctivo y calibración de maquinaria y equipo.\",\n          \"Conciencia en el cumplimiento de las instrucciones para el uso de los equipos.\",\n          \"Rigurosidad en el mantenimiento de condiciones higiénicas de las áreas de producción.\",\n          \"Reconocimiento de la importancia del uso de equipos de protección.\"\n        ],\n        \"fuente\": \"extraido\"\n      }\n    },\n    {\n      \"codigo\": \"UA-ManejoOfimatica\",\n      \"denominacion\": \"Manejo de herramientas ofimáticas\",\n      \"es_transversal\": true,\n      \"duracion_horas\": 45,\n      \"elementos\": [],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Produce documentos informáticos a partir del uso de programas de procesamiento de textos.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Crea hojas de cálculo básicas a partir de las herramientas de los programas informáticos.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Realiza presentaciones de acuerdo con las necesidades de comunicación.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA4\",\n          \"descripcion\": \"Alimenta bases de datos según las necesidades de información.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Procesamiento de texto: Conceptos básicos, funciones de edición y formato, herramientas de colaboración.\",\n          \"Hojas de cálculo: Estructura, fórmulas básicas, funciones de análisis de datos, gráficos.\",\n          \"Presentaciones: Diseño de diapositivas, inserción de elementos multimedia, técnicas de exposición.\",\n          \"Bases de datos: Estructura, tipos de datos, consultas básicas, ingreso y actualización de información.\",\n          \"Sistemas operativos: Conceptos fundamentales, gestión de archivos y carpetas, personalización del entorno.\"\n        ],\n        \"procedimentales\": [\n          \"Elaborar documentos profesionales utilizando procesadores de texto.\",\n          \"Crear y gestionar hojas de cálculo para el análisis de datos agrícolas.\",\n          \"Diseñar presentaciones visuales para comunicar resultados o propuestas.\",\n          \"Registrar y consultar información en bases de datos simples.\",\n          \"Organizar archivos y carpetas de manera eficiente en el sistema operativo.\"\n        ],\n        \"actitudinales\": [\n          \"Precisión y atención al detalle en la creación de documentos y datos.\",\n          \"Proactividad en el aprendizaje y adaptación a nuevas herramientas ofimáticas.\",\n          \"Colaboración efectiva en el uso compartido de documentos.\",\n          \"Responsabilidad en el manejo y la seguridad de la información digital.\"\n        ],\n        \"fuente\": \"generado_ia\"\n      }\n    },\n    {\n      \"codigo\": \"UA-ProteccionAmbiente\",\n      \"denominacion\": \"Protección del ambiente.\",\n      \"es_transversal\": true,\n      \"duracion_horas\": 45,\n      \"elementos\": [],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Incorpora las medidas de protección ambiental a su quehacer laboral de acuerdo con las necesidades de su entorno.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Dispone de los residuos y desechos de la actividad productiva agrícola conforme al plan de manejo ambiental y protocolos de la organización.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Impacto ambiental de la actividad agrícola: Contaminación del suelo, agua y aire, pérdida de biodiversidad.\",\n          \"Legislación ambiental: Normativas y regulaciones aplicables al sector agropecuario.\",\n          \"Gestión de residuos: Clasificación, tratamiento y disposición final de residuos agrícolas (orgánicos, químicos, envases).\",\n          \"Uso sostenible de recursos: Agua, suelo, energía y materiales.\",\n          \"Buenas prácticas ambientales (BPA): Conceptos y aplicación en la producción agrícola.\"\n        ],\n        \"procedimentales\": [\n          \"Identificar y evaluar los impactos ambientales de las operaciones agrícolas.\",\n          \"Implementar medidas preventivas y correctivas para la protección ambiental.\",\n          \"Clasificar y segregar los residuos generados en la finca.\",\n          \"Aplicar técnicas de manejo y disposición de residuos y envases de agroquímicos.\",\n          \"Participar en programas de sensibilización y capacitación ambiental.\"\n        ],\n        \"actitudinales\": [\n          \"Conciencia y compromiso con la sostenibilidad ambiental.\",\n          \"Responsabilidad en el cumplimiento de la normativa ambiental.\",\n          \"Actitud proactiva hacia la reducción del impacto ecológico.\",\n          \"Valoración de los recursos naturales y su conservación para futuras generaciones.\"\n        ],\n        \"fuente\": \"generado_ia\"\n      }\n    },\n    {\n      \"codigo\": \"UA-ExperimentacionProblemas\",\n      \"denominacion\": \"Experimentación en la solución de problemas de acuerdo con contexto productivo.\",\n      \"es_transversal\": true,\n      \"duracion_horas\": 45,\n      \"elementos\": [],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Identifica las oportunidades de creación de valor en la unidad productiva agrícola de acuerdo con las demandas del mercado.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Determina las necesidades del talento humano en función de la generación de valor en productos y servicios agrícolas.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Elabora presupuestos conforme a los objetivos de la unidad productiva agrícola y las tendencias del mercado.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA4\",\n          \"descripcion\": \"Proyecta acciones de crecimiento de la unidad productiva agrícola de acuerdo con las tendencias y demandas del mercado.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        },\n        {\n          \"codigo\": \"RA5\",\n          \"descripcion\": \"Explica los riesgos que afectan la unidad productiva en función de la sostenibilidad de la actividad agrícola.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": []\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Innovación y creación de valor: Conceptos, tipos de innovación (producto, proceso, mercado, organizacional).\",\n          \"Análisis de mercado: Identificación de necesidades, tendencias, segmentación y posicionamiento.\",\n          \"Gestión del talento humano: Detección de necesidades de capacitación, desarrollo de habilidades, liderazgo.\",\n          \"Finanzas básicas: Presupuesto, costos de producción, análisis de rentabilidad, fuentes de financiación.\",\n          \"Planificación estratégica: Visión, misión, objetivos, estrategias de crecimiento y diversificación.\",\n          \"Análisis de riesgos: Identificación, evaluación y mitigación de riesgos (climáticos, de mercado, operativos).\"\n        ],\n        \"procedimentales\": [\n          \"Realizar diagnósticos para identificar oportunidades de mejora y valor agregado.\",\n          \"Diseñar planes de capacitación para el equipo de trabajo.\",\n          \"Elaborar proyecciones financieras y presupuestos operativos.\",\n          \"Formular estrategias de crecimiento y expansión para la unidad productiva.\",\n          \"Implementar metodologías de análisis de problemas y toma de decisiones.\"\n        ],\n        \"actitudinales\": [\n          \"Mentalidad innovadora y orientada a la búsqueda de soluciones.\",\n          \"Actitud analítica y crítica frente a los desafíos productivos.\",\n          \"Proactividad en la gestión de recursos y oportunidades.\",\n          \"Visión estratégica y capacidad para anticipar escenarios futuros.\",\n          \"Resiliencia y adaptabilidad ante situaciones cambiantes.\"\n        ],\n        \"fuente\": \"generado_ia\"\n      }\n    },\n    {\n      \"codigo\": \"UA6-3-AGVE-AGR-00n\",\n      \"denominacion\": \"FORMACIÓN EN EL CENTRO DE TRABAJO\",\n      \"es_transversal\": false,\n      \"duracion_horas\": 170,\n      \"elementos\": [],\n      \"resultados_aprendizaje\": [\n        {\n          \"codigo\": \"RA1\",\n          \"descripcion\": \"Proponer planes de fertilización en función de los análisis de suelos y los requerimientos nutricionales del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Identifica las características físicas del suelo y/o sustratos en función de los requerimientos del cultivo.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA2\",\n          \"descripcion\": \"Aplicar técnicas de manejo de suelo y aguas teniendo en cuenta las condiciones agroclimáticas y las características agronómicas del sistema productivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Maneja con precisión el sistema de riego teniendo en cuenta sus características de diseño.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Prepara el suelo en correspondencia con prácticas sostenibles de manejo.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA3\",\n          \"descripcion\": \"Alistar agroinsumos conforme a los requerimientos del proceso productivo, recomendaciones y fichas técnicas de los productos.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Utiliza de manera precisa los insumos de acuerdo con las necesidades fisiológicas del cultivo\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA4\",\n          \"descripcion\": \"Aplicar técnicas de siembra de material vegetal en función del sistema productivo y las condiciones agroecológicas de la zona.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE2\",\n              \"descripcion\": \"Trasplanta y resiembra material vegetal según condiciones agroecológicas y características de la especie.\"\n            },\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Dispone en campo el material vegetal en función del trazado del cultivo y/o asocio de cultivos.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA5\",\n          \"descripcion\": \"Aplicar técnicas de manejo integrado del cultivo teniendo en cuenta las características agronómicas del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Utiliza los agroinsumos teniendo en cuenta la efectividad del ingrediente activo en el control y/o nutrición de plantas.\"\n            },\n            {\n              \"codigo\": \"CE8\",\n              \"descripcion\": \"Usa elementos de protección de acuerdo con recomendaciones técnicas.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA6\",\n          \"descripcion\": \"Recoger la cosecha de acuerdo con el estado de madurez de la planta y/o de los frutos.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Manipula los productos cosechados de acuerdo con las recomendaciones técnicas y NTC.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Inspecciona los productos cosechados teniendo en cuenta los tipos de contaminantes físicos y sanitarios que pueden afectar su calidad.\"\n            },\n            {\n              \"codigo\": \"CE10\",\n              \"descripcion\": \"Efectúa análisis de control de calidad en la etapa de cosecha según procedimientos técnicos/NTC y características de los productos agrícolas.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA7\",\n          \"descripcion\": \"Revisar la calidad del producto acondicionado según características de calidad y requerimientos del mercado.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE3\",\n              \"descripcion\": \"Realiza análisis de calidad de productos acondicionados según POE, NTC, buenas prácticas de manufactura, etc.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Diferencia, separa y desecha el producto no conforme según lo estipulado en el procedimiento.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA8\",\n          \"descripcion\": \"Ejecutar programas de mantenimiento y calibración de maquinaria y equipos agrícolas en función de las actividades productivas a realizar y características de la unidad productiva.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE4\",\n              \"descripcion\": \"Efectúa los programas de mantenimiento preventivo y correctivo de acuerdo con la disponibilidad de recursos financieros.\"\n            },\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Ajusta y repara en condiciones de finca la maquinaria y equipo teniendo en cuenta manuales y fichas técnicas del fabricante.\"\n            }\n          ]\n        },\n        {\n          \"codigo\": \"RA9\",\n          \"descripcion\": \"Operar la maquinaria y equipos de acuerdo con los manuales técnicos del fabricante y necesidades del cultivo.\",\n          \"duracion_horas\": null,\n          \"criterios_evaluacion\": [\n            {\n              \"codigo\": \"CE5\",\n              \"descripcion\": \"Afora y carga la maquinaria y equipos agrícolas según las actividades a realizar y recomendaciones técnicas.\"\n            },\n            {\n              \"codigo\": \"CE6\",\n              \"descripcion\": \"Utiliza accesorios de las maquinaria y equipos según la especificidad de actividades a realizar y naturaleza de los cultivos/procesos productivos.\"\n            },\n            {\n              \"codigo\": \"CE7\",\n              \"descripcion\": \"Realiza limpieza y desinfección de la maquinaria y equipo antes y después de su uso en correspondencia con las actividades para la que fueron utilizadas.\"\n            }\n          ]\n        }\n      ],\n      \"contenidos\": {\n        \"conceptuales\": [\n          \"Conceptos fundamentales de planeación agrícola y proyectos productivos.\",\n          \"Principios de manejo sostenible del suelo y agua en sistemas agrícolas.\",\n          \"Tipos y características de insumos agrícolas y su aplicación segura.\",\n          \"Métodos y técnicas de siembra, establecimiento y mantenimiento de cultivos.\",\n          \"Identificación y gestión de plagas, enfermedades y arvenses.\",\n          \"Criterios de madurez y calidad en la cosecha y poscosecha de productos.\",\n          \"Conceptos de acondicionamiento y agregación de valor a productos agrícolas.\",\n          \"Fundamentos de mantenimiento preventivo y correctivo de maquinaria agrícola.\",\n          \"Normativas de seguridad y salud ocupacional en operaciones agrícolas.\"\n        ],\n        \"procedimentales\": [\n          \"Aplicación de técnicas y herramientas de planeación de proyectos productivos agrícolas\",\n          \"Realización de prácticas culturales\",\n          \"Preparación, rotación y aplicación de insumos agrícolas\",\n          \"Cosecha y acondicionamiento de productos agrícolas\",\n          \"Uso de elementos de protección personal en los procesos de producción y cosecha de productos agrícolas\",\n          \"Manipulación de productos agrícolas\",\n          \"Mantenimiento de la calidad e inocuidad del producto durante las etapas de producción, transformación y almacenamiento de los productos.\",\n          \"Tratamiento de producto no conforme.\",\n          \"Uso y operación de maquinaria y equipos agrícolas.\",\n          \"Limpieza y desinfección de herramientas, implementos, maquinaria y equipos.\",\n          \"Mantenimiento de áreas de producción (lotes, viveros, invernaderos, bodegas, etc.).\",\n          \"Utilización de herramientas de monitoreo y seguimiento\",\n          \"Utilización de elementos de seguridad y salud en el trabajo\"\n        ],\n        \"actitudinales\": [\n          \"Análisis en la planeación del proceso productivo\",\n          \"Autorreflexión frente a las capacidades y oportunidades de la unidad productiva\",\n          \"Resolución de problemas en el desarrollo de las actividades y procesos productivos.\",\n          \"Conciencia sobre la importancia de conservar el medio ambiente y los recursos.\",\n          \"Actitud crítica frente a las deficiencias de los procesos para proponer soluciones y/o acciones de mejora.\",\n          \"Conciencia frente a la importancia de mantener la calidad e inocuidad de los productos.\",\n          \"Análisis del entorno comercial para la toma de decisiones\",\n          \"Riguroso en la ejecución de los planes y programas de producción agrícola.\",\n          \"Rigurosidad en la ejecución de programas de mantenimiento preventivo y correctivo y calibración de maquinaria y equipo.\",\n          \"Liderazgo en el manejo de personas a su cargo.\",\n          \"Capacidad de análisis frente a las necesidades del recurso humano para el desarrollo del proceso productivo\"\n        ],\n        \"fuente\": \"generado_ia\"\n      }\n    }\n  ]\n}"
+                  }
+                ],
+                "role": "model"
+              },
+              "finishReason": "STOP",
+              "index": 0,
+              "citationMetadata": {
+                "citationSources": [
+                  {
+                    "startIndex": 1155,
+                    "endIndex": 2157,
+                    "uri": "",
+                    "license": ""
+                  },
+                  {
+                    "startIndex": 2169,
+                    "endIndex": 2893,
+                    "uri": "",
+                    "license": ""
+                  },
+                  {
+                    "startIndex": 3021,
+                    "endIndex": 3994,
+                    "uri": "",
+                    "license": ""
+                  },
+                  {
+                    "startIndex": 4290,
+                    "endIndex": 4965,
+                    "uri": "",
+                    "license": ""
+                  },
+                  {
+                    "startIndex": 4973,
+                    "endIndex": 5337,
+                    "uri": "https://es.scribd.com/document/517436245/lineamientos-anexo-tecnico-res-202-2021-v5",
+                    "license": ""
+                  },
+                  {
+                    "startIndex": 5409,
+                    "endIndex": 5748,
+                    "uri": "https://es.scribd.com/document/517436245/lineamientos-anexo-tecnico-res-202-2021-v5",
+                    "license": ""
+                  },
+                  {
+                    "startIndex": 6682,
+                    "endIndex": 6916,
+                    "uri": "https://es.scribd.com/document/517436245/lineamientos-anexo-tecnico-res-202-2021-v5",
+                    "license": ""
+                  }
+                ]
+              }
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 30619,
+            "candidatesTokenCount": 20210,
+            "totalTokenCount": 59847,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 30619
+              }
+            ],
+            "thoughtsTokenCount": 9018
+          },
+          "modelVersion": "gemini-2.5-flash",
+          "responseId": "Gm2bacT1M82UmtkPi47U0Qw"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Inicio Manual": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - Listar PDFs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase - Get CINE F",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Get CINE F": {
+      "main": [
+        [
+          {
+            "node": "Merge PDF + CINE F",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google Drive - Listar PDFs": {
+      "main": [
+        [
+          {
+            "node": "Extraer Texto del PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Texto del PDF": {
+      "main": [
+        [
+          {
+            "node": "Merge PDF + CINE F",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge PDF + CINE F": {
+      "main": [
+        [
+          {
+            "node": "Preparar Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Prompt": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y Limpiar JSON": {
+      "main": [
+        [
+          {
+            "node": "¿JSON Válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿JSON Válido?": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Cualificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Validar y Limpiar JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insertar Cualificación": {
+      "main": [
+        [
+          {
+            "node": "Preparar Competencias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Competencias": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Competencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insertar Competencia": {
+      "main": [
+        [
+          {
+            "node": "Preparar Elementos",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar Resultados Aprendizaje",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar Conocimientos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Elementos": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Elementos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insertar Elementos": {
+      "main": [
+        [
+          {
+            "node": "Preparar Criterios Desempeño",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Criterios Desempeño": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Criterios Desempeño",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Resultados Aprendizaje": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Resultados Aprendizaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insertar Resultados Aprendizaje": {
+      "main": [
+        [
+          {
+            "node": "Preparar Criterios Evaluación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Criterios Evaluación": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Criterios Evaluación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Conocimientos": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insertar Conocimientos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ad4cd2b2-80d3-4ee5-bea9-642aa42695dd",
+  "meta": {
+    "instanceId": "9e365148c8286a677c2159a5315beb8e14bed6fd8d208e41bf624f1b9ed08549"
+  },
+  "id": "FAuk5mtKl1ZvMOOo",
+  "tags": []
+}

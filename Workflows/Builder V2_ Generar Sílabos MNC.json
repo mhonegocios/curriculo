@@ -1,0 +1,145 @@
+{
+  "name": "Builder V2: Generar Sílabos MNC",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generar-silabo-microcredencial",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "84dce166-3668-430c-8e00-f482b9b8a31e",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Eres un experto en el diseño y estructuración de programas de formación bajo el **Marco Nacional de Cualificaciones (MNC) de Colombia**. Tu objetivo es generar estructuras formativas detalladas y estandarizadas, garantizando la trazabilidad técnica con los catálogos de cualificaciones para el desarrollo de competencias y el aprendizaje a lo largo de la vida.\n\nSe te proporciona la siguiente información de una microcredencial ya registrada en el sistema:\n\n**Nombre del programa**: {{ $json.body.microcredencial }}\n**Descripción**: {{ $json.body.descripcion }}\n**Horas totales asignadas**: {{ $json.body.horas_totales }}\n**Créditos**: {{ $json.body.creditos }}\n**Nivel MNC**: {{ $json.body.nivel_mnc }}\n**Resultados de Aprendizaje (RAs)**:\n{{ JSON.stringify($json.body.ras, null, 2) }}\n\n**(NUEVO) CONOCIMIENTOS ESENCIALES (SABERES)**:\nEstos son los saberes asociados que fundamentan el programa.\n{{ JSON.stringify($json.body.conocimientos_esenciales, null, 2) }}\n\n---\n\nCon base en esa información, genera la estructura formativa del programa. Las horas totales ({{ $json.body.horas_totales }}h) y el nivel MNC ({{ $json.body.nivel_mnc }}) están definidos por el usuario y NO debes cambiarlos. Tu trabajo es distribuir esas horas inteligentemente entre los módulos.\n\nGenera el JSON con las siguientes secciones:\n\n---\n\n## PRESENTACIÓN\nGenera estos campos:\n- descripcion_general: Resumen del programa incluyendo propósito, pertinencia y contexto\n- objetivos_aprendizaje: Array de objetivos medibles y alcanzables\n- referentes_normativos: Código + denominación de la cualificación del MNC relacionada\n- competencia_general: Formato Verbo + Objeto + Condición\n- habilidades_especificas: Objeto con arrays \"tecnicas\" y \"transversales\"\n- modelo_metodologico: Metodología de enseñanza (ej: ABP, Aprendizaje activo)\n- publico_objetivo: Perfil del estudiante ideal\n- prerrequisitos: Conocimientos previos necesarios\n- articulacion: Objeto con \"programa_previo\" y \"programa_siguiente\"\n\n---\n\n## MÓDULOS (contenido temático)\nGenera un array de módulos que en total sumen exactamente {{ $json.body.horas_totales }} horas. Cada módulo debe alinearse con uno o más de los Resultados de Aprendizaje proporcionados.\n\nPara CADA módulo incluye:\n- numero: Número secuencial\n- titulo: Nombre descriptivo\n- descripcion: Resumen de los temas cubiertos\n- objetivos_especificos: Array de objetivos del módulo\n- duracion_horas: Horas asignadas (deben sumar {{ $json.body.horas_totales }} en total)\n- temas: Array de subtemas conceptuales. ¡CRÍTICO! Estos temas DEBEN extraerse o inspirarse directamente en los **Conceptuales (Saber)** y **Procedimentales (Saber Hacer)** proporcionados en los Conocimientos Esenciales.\n- materiales_estudio: Array de recursos (videos, lecturas, artículos)\n- actividades_aprendizaje: Array de actividades prácticas. ¡CRÍTICO! Deben ser coherentes con el Nivel MNC e integrar explícitamente los **Procedimentales (Saber Hacer)** y **Actitudinales (Ser)** de los Conocimientos Esenciales.\n- estrategias_evaluacion: Objeto con claves \"saber\" (conocimiento conceptual), \"saber_hacer\" (desempeño procedimental), \"ser\" (actitudinal). Estas estrategias evalúan las actividades de aprendizaje diseñadas.\n- criterios_evaluacion: Array de estándares para aprobar\n- resultados_aprendizaje: Array de RAs del MNC alineados a este módulo (usando los códigos proporcionados)\n\n---\n\n## RECURSOS ADICIONALES\n- bibliografia: Array de referencias bibliográficas\n- herramientas_software: Array de software o herramientas necesarias\n\n---\n\n## POLÍTICAS\n- asistencia: Política de asistencia\n- aprobacion: Política de aprobación\n\n---\n\n## PERFIL DE INSTRUCTORES\n- educacion: Nivel educativo requerido\n- formacion_complementaria: Certificaciones adicionales\n- experiencia: Años y área de experiencia\n\n---\n\n## CERTIFICACIÓN Y RECONOCIMIENTO\n- nombre_credencial: Nombre de la microcredencial\n- descripcion: Descripción de la credencial\n- habilidades_desarrolladas: Array de habilidades\n- requisitos_logro: Array de condiciones para obtener la credencial\n- norma: Norma base si aplica\n- evidencias_logro: Array de cómo se demuestra el logro\n- firmas_certificadoras: Array de entidades que certifican\n\n---\n\n**INSTRUCCIONES CRÍTICAS**:\n1. Tu respuesta DEBE ser EXCLUSIVAMENTE un objeto JSON válido. No incluyas texto, explicaciones ni bloques markdown.\n2. Las horas de los módulos DEBEN sumar exactamente {{ $json.body.horas_totales }} horas.\n3. ALINEACIÓN PROFUNDA: Asegúrate de que los \"temas\" reflejen los \"Saberes\" (conceptuales) y las \"actividades_aprendizaje\" reflejen el \"Saber Hacer\" (procedimentales) y \"Ser\" (actitudinales) provistos en la carga de entrada. Las \"estrategias_evaluacion\" y su matriz luego se derivarán de estas actividades, así que deben ser muy claras.\n4. El nivel de profundidad del contenido debe ser coherente con el Nivel MNC {{ $json.body.nivel_mnc }}.\n5. La estructura JSON debe seguir exactamente el schema que define el output parser.\n\nRESTRICCIONES Y CONTEXTO ESPECÍFICO DE ESTE SÍLABO: Adapta absolutamente toda la metodología, actividades, recursos y perfiles a las siguientes directrices:\n\nModalidad de Impartición: {{ $json.body.modalidad }}\nEnfoque Pedagógico: {{ $json.body.enfoquePedagogico }}\nPerfil de Ingreso Habitual: {{ $json.body.perfilIngreso }}\nRestricciones de Hardware/Infraestructura: {{ $json.body.restriccionesHardware }}\nNota Crítica: Bajo ninguna circunstancia propongas actividades o herramientas que contradigan la Modalidad, el Enfoque o las Restricciones indicadas arriba.",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "id": "llm-chain",
+      "name": "Generar Sílabo MNC",
+      "position": [
+        400,
+        0
+      ],
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "gemini-model",
+      "name": "Google Gemini",
+      "position": [
+        208,
+        208
+      ],
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "QpyFgg388EdoFayA",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"presentacion\": {\n    \"descripcion_general\": \"Este programa forma competencias en gestión de datos aplicando estándares del MNC colombiano.\",\n    \"objetivos_aprendizaje\": [\"Identificar conceptos fundamentales\", \"Aplicar técnicas de consulta SQL\"],\n    \"referentes_normativos\": \"220501086_1 Establecer requisitos de infraestructura tecnológica\",\n    \"competencia_general\": \"Gestionar datos y bases de información aplicando estándares de calidad.\",\n    \"habilidades_especificas\": {\n      \"tecnicas\": [\"Modelado de datos\", \"SQL básico\"],\n      \"transversales\": [\"Pensamiento analítico\", \"Trabajo colaborativo\"]\n    },\n    \"modelo_metodologico\": \"Aprendizaje basado en problemas (ABP)\",\n    \"publico_objetivo\": \"Profesionales del sector TIC.\",\n    \"prerrequisitos\": \"Conocimientos básicos de informática.\",\n    \"articulacion\": {\n      \"programa_previo\": \"Alfabetización Digital\",\n      \"programa_siguiente\": \"Análisis Avanzado de Datos\"\n    }\n  },\n  \"modulos\": [\n    {\n      \"numero\": 1,\n      \"titulo\": \"Fundamentos de Datos\",\n      \"descripcion\": \"Introducción a los conceptos de datos.\",\n      \"objetivos_especificos\": [\"Comprender tipos de datos\"],\n      \"duracion_horas\": 12,\n      \"temas\": [\"Tipos de datos\", \"Fuentes de datos\"],\n      \"materiales_estudio\": [\"Video: Intro a BD\"],\n      \"actividades_aprendizaje\": [\"Caso práctico: fuentes de datos\"],\n      \"estrategias_evaluacion\": {\n        \"saber\": \"Quiz de conceptos\",\n        \"saber_hacer\": \"Ejercicio práctico\",\n        \"ser\": \"Autoevaluación\"\n      },\n      \"criterios_evaluacion\": [\"Identifica el 70% de tipos de datos\"],\n      \"resultados_aprendizaje\": [\"RA1 Identificar conceptos fundamentales\"]\n    }\n  ],\n  \"recursos_adicionales\": {\n    \"bibliografia\": [\"García, M. (2024). Gestión de Datos.\"],\n    \"herramientas_software\": [\"MySQL Workbench\"]\n  },\n  \"politicas\": {\n    \"asistencia\": \"Asistencia mínima del 80%.\",\n    \"aprobacion\": \"Calificación mínima del 70%.\"\n  },\n  \"perfil_instructores\": {\n    \"educacion\": \"Profesional en Ingeniería de Sistemas.\",\n    \"formacion_complementaria\": \"Certificación en bases de datos.\",\n    \"experiencia\": \"3 años en gestión de datos.\"\n  },\n  \"certificacion\": {\n    \"nombre_credencial\": \"Microcredencial en Fundamentos de Gestión de Datos\",\n    \"descripcion\": \"Certifica competencias básicas.\",\n    \"habilidades_desarrolladas\": [\"Modelado de datos\"],\n    \"requisitos_logro\": [\"Asistencia 80%\", \"Evaluaciones 70%\"],\n    \"norma\": \"220501086_1 del CNC\",\n    \"evidencias_logro\": [\"Portafolio\", \"Proyecto integrador\"],\n    \"firmas_certificadoras\": [\"Institución emisora\"]\n  }\n}"
+      },
+      "id": "output-parser",
+      "name": "Output Parser Sílabo",
+      "position": [
+        560,
+        224
+      ],
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Responder Sílabo",
+      "position": [
+        800,
+        0
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Generar Sílabo MNC": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Responder Sílabo",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Google Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "index": 0,
+            "node": "Generar Sílabo MNC",
+            "type": "ai_languageModel"
+          }
+        ]
+      ]
+    },
+    "Output Parser Sílabo": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generar Sílabo MNC",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Generar Sílabo MNC",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "f1ab7d42-b0ef-457f-a9a7-07f9ca5afdcc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9e365148c8286a677c2159a5315beb8e14bed6fd8d208e41bf624f1b9ed08549"
+  },
+  "id": "KxPFuLln1VrlOAFz",
+  "tags": []
+}
