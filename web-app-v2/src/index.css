@@ -1,0 +1,216 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════
+   Diseño Curricular Inteligente V2 — Sistema de Diseño
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Tokens de Marca (invariantes por tema) ─────────── */
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  --color-brand-50: oklch(0.97 0.02 260);
+  --color-brand-100: oklch(0.93 0.04 260);
+  --color-brand-200: oklch(0.86 0.08 260);
+  --color-brand-300: oklch(0.76 0.12 260);
+  --color-brand-400: oklch(0.68 0.16 260);
+  --color-brand-500: oklch(0.58 0.2 260);
+  --color-brand-600: oklch(0.5 0.2 260);
+  --color-brand-700: oklch(0.42 0.18 260);
+  --color-brand-800: oklch(0.35 0.14 260);
+  --color-brand-900: oklch(0.25 0.1 260);
+  --color-brand-950: oklch(0.18 0.06 260);
+
+  --color-accent-400: oklch(0.75 0.18 155);
+  --color-accent-500: oklch(0.65 0.2 155);
+
+  --color-warn-400: oklch(0.78 0.16 70);
+  --color-warn-500: oklch(0.7 0.18 70);
+
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-slide-in-right: slide-in-right 0.25s ease-out;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ═════════════════════════════════════════════════════
+   MODO CLARO (por defecto)
+   ═════════════════════════════════════════════════════ */
+:root {
+  --surface-0: oklch(0.97 0.005 260);
+  --surface-1: oklch(1.0 0 0);
+  --surface-2: oklch(0.95 0.005 260);
+  --surface-3: oklch(0.92 0.008 260);
+  --surface-4: oklch(0.88 0.01 260);
+
+  --text-primary: oklch(0.15 0.02 260);
+  --text-secondary: oklch(0.4 0.02 260);
+  --text-muted: oklch(0.55 0.02 260);
+
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --hover-overlay: rgba(0, 0, 0, 0.03);
+  --scrollbar-thumb: oklch(0.78 0.01 260);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+
+  color-scheme: light;
+}
+
+/* ═════════════════════════════════════════════════════
+   MODO OSCURO (override con clase .dark)
+   ═════════════════════════════════════════════════════ */
+:root.dark {
+  --surface-0: oklch(0.13 0.01 260);
+  --surface-1: oklch(0.16 0.012 260);
+  --surface-2: oklch(0.19 0.014 260);
+  --surface-3: oklch(0.22 0.016 260);
+  --surface-4: oklch(0.26 0.018 260);
+
+  --text-primary: oklch(0.95 0.01 260);
+  --text-secondary: oklch(0.72 0.02 260);
+  --text-muted: oklch(0.52 0.02 260);
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --hover-overlay: rgba(255, 255, 255, 0.04);
+  --scrollbar-thumb: oklch(0.35 0.02 260);
+  --glass-bg: oklch(0.19 0.014 260 / 0.8);
+
+  color-scheme: dark;
+}
+
+/* ── Estilos Base ───────────────────────────────────── */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--surface-0);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Scrollbar personalizado ────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+/* ── Bordes adaptativos ─────────────────────────────── */
+.border-theme {
+  border-color: var(--border-subtle);
+}
+
+/* ── Animaciones ────────────────────────────────────── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.58 0.2 260 / 0);
+  }
+
+  50% {
+    box-shadow: 0 0 20px 4px oklch(0.58 0.2 260 / 0.15);
+  }
+}
+
+/* ── Utilidades ─────────────────────────────────────── */
+@utility glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ═════════════════════════════════════════════════════
+   Overrides de Modo Claro
+   Tailwind genera clases como border-white/[0.06] que
+   solo funcionan en modo oscuro. Estos overrides las
+   adaptan al tema claro.
+   ═════════════════════════════════════════════════════ */
+
+/* Fondos con white/opacity usado como border-separators */
+:root:not(.dark) .bg-white\/\[0\.02\],
+:root:not(.dark) .bg-white\/\[0\.04\],
+:root:not(.dark) .bg-white\/\[0\.06\] {
+  background-color: var(--hover-overlay) !important;
+}
+
+:root:not(.dark) .border-white\/\[0\.04\],
+:root:not(.dark) .border-white\/\[0\.06\] {
+  border-color: var(--border-subtle) !important;
+}
+
+:root:not(.dark) .hover\:bg-white\/\[0\.02\]:hover,
+:root:not(.dark) .hover\:bg-white\/\[0\.04\]:hover {
+  background-color: var(--hover-overlay) !important;
+}
+
+
+/* Sombras: en modo claro las sombras son visibles normalmente, no necesitan override */
+
+/* Transición suave al cambiar de tema */
+*,
+*::before,
+*::after {
+  transition-property: color, background-color, border-color, fill, stroke;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+
+/* Excepción: animaciones y transform no deben tener transición global */
+.animate-spin,
+.animate-pulse,
+.animate-bounce {
+  transition: none !important;
+}
